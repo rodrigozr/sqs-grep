@@ -19,6 +19,16 @@ Find messages containing a string attribute called 'Error' and that attribute do
 $ ./sqs-grep --queue MyQueue --negate --attribute "Error=\\d{3}"
 ```
 
+Move all messages from one queue to another
+```
+$ ./sqs-grep --queue MyQueue --moveTo DestQueue --body ^
+```
+
+Delete all messages containing the text 'Error' in the body
+```
+$ ./sqs-grep --queue MyQueue --delete --body Error
+```
+
 # Options
 ```
 $ ./sqs-grep --help
