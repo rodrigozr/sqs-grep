@@ -1,0 +1,25 @@
+{
+  "name": "sqs-grep",
+  "version": "1.0.0",
+  "description": "Greps AWS SQS Messages from the command-line",
+  "main": "sqs-grep.js",
+  "bin": "sqs-grep.js",
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "keywords": [
+    "aws",
+    "sqs",
+    "grep",
+    "cli",
+    "commandline"
+  ],
+  "author": "Rodrigo Rosauro",
+  "license": "MIT",
+  "dependencies": {
+    "aws-sdk": "^2.509.0",
+    "chalk": "^2.4.2",
+    "command-line-args": "^5.1.1",
+    "command-line-usage": "^6.0.2"
+  }
+}
