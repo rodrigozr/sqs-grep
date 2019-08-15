@@ -1,6 +1,8 @@
 # AWS SQS grep
 Command-line tool used to scan thru an AWS SQS queue and find messages matching a certain criteria
 
+[Download pre-built binaries here](https://github.com/rodrigozr/sqs-grep/releases)
+
 # Usage examples
 Find messages containing the text 'Error' in the body:
 ```
