@@ -1,5 +1,6 @@
 # AWS SQS grep
-Command-line tool used to scan thru an AWS SQS queue and find messages matching a certain criteria
+Command-line tool used to scan thru an AWS SQS queue and find messages matching a certain criteria.
+It can also optionally delete the matching messages or move them to another SQS queue.
 
 [Download pre-built binaries here](https://github.com/rodrigozr/sqs-grep/releases)
 
@@ -56,7 +57,7 @@ $ ./sqs-grep --accessKeyId "KEY" --secretAccessKey "SECRET" <other options>
 ```
 $ ./sqs-grep --help
 
-qs-grep version 1.1
+sqs-grep version 1.2
 
 sqs-grep
 
@@ -83,18 +84,21 @@ Credential options
 
 Other options
 
-  -n, --negate            Negates the result of the pattern matching                                    
-                          (I.e.: to find messages NOT containing a text)                                
-  -t, --timeout seconds   Timeout for the whole operation to complete (also used as the SQS message     
-                          visibility timeout)                                                           
-  -j, --parallel number   Number of parallel pollers to start (to speed-up the scan)                    
-  -s, --silent            Does not print the message contents (only count them)                         
-  -f, --full              Prints the full message content (Body and all MessageAttributes)              
-                          By default, only the message body is printed                                  
-  --stripAttributes       When --moveTo is set, this option will cause all message attributes to be     
-                          stripped when moving it to the target queue                                   
-  -h, --help              Prints this help message                                                      
-  -v, --version           Prints the application version                                                
+  -n, --negate                Negates the result of the pattern matching                                    
+                              (I.e.: to find messages NOT containing a text)                                
+  -t, --timeout seconds       Timeout for the whole operation to complete.                                  
+                              The message visibility timeout will be calculated based on this value as well 
+                              and the elapsed time to ensure that messages become visible again as soon as  
+                              possible.                                                                     
+  -m, --maxMessages integer   Maximum number of messages to match                                          
+  -j, --parallel number       Number of parallel pollers to start (to speed-up the scan)                    
+  -s, --silent                Does not print the message contents (only count them)                         
+  -f, --full                  Prints the full message content (Body and all MessageAttributes)              
+                              By default, only the message body is printed                                  
+  --stripAttributes           When --moveTo is set, this option will cause all message attributes to be     
+                              stripped when moving it to the target queue                                   
+  -h, --help                  Prints this help message                                                      
+  -v, --version               Prints the application version                                                
 
 Usage examples
 

@@ -37,18 +37,26 @@ async function main() {
         running = false;
     });
     printMatchingRules();
+    const keepRunning = () => running && new Date().getTime() < endAt && (options.maxMessages == 0 || qtyMatched < options.maxMessages);
     console.log('Scanning...');
     const promises = nTimes(options.parallel, async () => {
-        while (running && emptyReceives < 10 && new Date().getTime() < endAt) {
+        while (keepRunning()) {
+            const elapsedSeconds = parseInt((new Date().getTime() - startedAt) / 1000);
             const res = await sqs.receiveMessage({
                 QueueUrl: sourceQueueUrl,
                 MaxNumberOfMessages: 10,
-                VisibilityTimeout: options.timeout,
+                VisibilityTimeout: Math.max(1, options.timeout + 10 - elapsedSeconds),
                 MessageAttributeNames: ['All'],
             }).promise();
+            if (!keepRunning()) {
+                break;
+            }
             if (!res.Messages || !res.Messages.length) {
-                emptyReceives++;
-                continue;
+                if (++emptyReceives < 5) {
+                    continue;
+                } else {
+                    break;
+                }
             }
             // Process received messages
             qtyScanned += res.Messages.length;
@@ -56,6 +64,9 @@ async function main() {
                 if (isMessageMatched(message)) {
                     qtyMatched++;
                     await processMatchedSqsMessage(message, sourceQueueUrl, targetQueueUrl);
+                    if (!keepRunning()) {
+                        break;
+                    }
                 }
             }
         }
@@ -66,7 +77,8 @@ async function main() {
     // Print the status
     console.log(`\nMessages scanned: ${qtyScanned}\nMessages matched: ${qtyMatched}`);
     if (!running) console.log('Interrupted');
-    else if (new Date().getTime() < endAt) console.log('Done');
+    else if (options.maxMessages && qtyMatched >= options.maxMessages) console.log('Done - Maximum number of messages matched');
+    else if (new Date().getTime() < endAt) console.log('Done - Scanned the whole queue');
     else console.log('Time exceeded');
 }
 
