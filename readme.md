@@ -29,9 +29,34 @@ Delete all messages containing the text 'Error' in the body
 $ ./sqs-grep --queue MyQueue --delete --body Error
 ```
 
+# Providing credentials
+By default, sqs-grep will read credentials from the "$HOME/.aws/credentials" file, which can be configured using the AWS CLI (aws configure).
+
+You also have the options below to provide credentials:
+
+## Prompting for credentials
+```
+$ ./sqs-grep --inputCredentials <other options>
+```
+
+## Using an external credential provider
+You can use an external credential provider tool as long as it outputs two separated lines
+containing the AWS "access key id" and "secret access key" (in that order).
+```
+$ get-aws-credentials | ./sqs-grep --inputCredentials <other options>
+```
+
+## Providing credentials in the command-line (not recommended)
+This option is simple, but not recommended as the credentials may be easily accessible by other processes
+```
+$ ./sqs-grep --accessKeyId "KEY" --secretAccessKey "SECRET" <other options>
+```
+
 # Options
 ```
 $ ./sqs-grep --help
+
+qs-grep version 1.1
 
 sqs-grep
 
@@ -48,10 +73,13 @@ Main options
   --delete                      Deletes matched messages from the queue (use with caution)                    
   --moveTo queue name           Moves matched messages to the given destination queue                         
 
-Credential options (not recommended - use "aws configure" instead)
+Credential options
 
-  --accessKeyId string       AWS access key id     
-  --secretAccessKey string   AWS secret access key 
+  -i, --inputCredentials     Input the AWS access key id and secret access key via stdin                   
+  --accessKeyId string       AWS access key id (not recommended: use "aws configure" or                    
+                             "--inputCredentials" instead)                                                 
+  --secretAccessKey string   AWS secret access key (not recommended: use "aws configure" or                
+                             "--inputCredentials" instead)                                                 
 
 Other options
 
@@ -66,6 +94,7 @@ Other options
   --stripAttributes       When --moveTo is set, this option will cause all message attributes to be     
                           stripped when moving it to the target queue                                   
   -h, --help              Prints this help message                                                      
+  -v, --version           Prints the application version                                                
 
 Usage examples
 
@@ -83,5 +112,5 @@ Usage examples
   $ ./sqs-grep --queue MyQueue --moveTo DestQueue --body ^                      
                                                                                 
   Delete all messages containing the text 'Error' in the body                   
-  $ ./sqs-grep --queue MyQueue --delete --body Error 
+  $ ./sqs-grep --queue MyQueue --delete --body Error                            
 ```

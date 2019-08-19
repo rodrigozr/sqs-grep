@@ -1,6 +1,7 @@
 const commandLineArgs = require('command-line-args');
 const commandLineUsage = require('command-line-usage');
 const chalk = require('chalk');
+const {version} = require('./version');
 
 /**
  * Parses a command-line "--attribute" argument into an attribute matching definition
@@ -23,10 +24,10 @@ const optionDefinitions = [
     { name: 'attribute', alias: 'a', group: 'main', multiple: true, type: parseAttribute, typeLabel: '{underline attr}={underline regexp}', description: 'Matches a message attribute\nYou can set this option multiple times to match multiple attributes' },
     { name: 'delete', type: Boolean, group: 'main', description: 'Deletes matched messages from the queue (use with caution)' },
     { name: 'moveTo', typeLabel: '{underline queue name}', group: 'main', description: 'Moves matched messages to the given destination queue' },
-
     // Credentials
-    { name: 'accessKeyId', description: 'AWS access key id', group: 'credentials' },
-    { name: 'secretAccessKey', description: 'AWS secret access key', group: 'credentials' },
+    { name: 'inputCredentials', alias: 'i', type: Boolean, description: 'Input the AWS access key id and secret access key via {underline stdin}', group: 'credentials' },
+    { name: 'accessKeyId', description: 'AWS access key id ({bold not recommended:} use "aws configure" or "--inputCredentials" instead)', group: 'credentials' },
+    { name: 'secretAccessKey', description: 'AWS secret access key ({bold not recommended:} use "aws configure" or "--inputCredentials" instead)', group: 'credentials' },
     // Other
     { name: 'negate', alias: 'n', type: Boolean, defaultValue: false, description: 'Negates the result of the pattern matching\n(I.e.: to find messages NOT containing a text)' },
     { name: 'timeout', alias: 't', type: Number, defaultValue: 60, typeLabel: '{underline seconds}', description: 'Timeout for the whole operation to complete (also used as the SQS message visibility timeout)' },
@@ -35,6 +36,7 @@ const optionDefinitions = [
     { name: 'full', alias: 'f', type: Boolean, defaultValue: false, description: 'Prints the full message content (Body and all MessageAttributes)\nBy default, only the message body is printed' },
     { name: 'stripAttributes', type: Boolean, defaultValue: false, description: 'When {bold --moveTo} is set, this option will cause all message attributes to be stripped when moving it to the target queue' },
     { name: 'help', alias: 'h', type: Boolean, defaultValue: false, description: 'Prints this help message' },
+    { name: 'version', alias: 'v', type: Boolean, defaultValue: false, description: 'Prints the application version' },
 ];
 
 /**
@@ -50,7 +52,7 @@ const usage = [
         optionList: optionDefinitions,
         group: 'main' },
     {
-        header: 'Credential options (not recommended - use "aws configure" instead)',
+        header: 'Credential options',
         content: 'There are two ways to configure the AWS access credentials:\n'
             + '1. Using the AWS command-line tools ({bold aws configure}) - {green recommended}\n'
             + '2. Using the command-line options listed below - {red not recommended}\n',
@@ -83,9 +85,17 @@ const usage = [
 const options = commandLineArgs(optionDefinitions)._all;
 
 /**
+ * Prints the application version to the console
+ */
+function showVersion() {
+    console.log(`sqs-grep version ${version}`);
+}
+
+/**
  * Prints the command-line help to the console
  */
 function showHelp() {
+    showVersion();
     console.log(commandLineUsage(usage));
 }
 
@@ -100,6 +110,10 @@ function showHelp() {
 function validateOptions() {
     if (options.help) {
         showHelp();
+        return false;
+    }
+    if (options.version) {
+        showVersion();
         return false;
     }
     if (!options.queue) {
@@ -129,6 +143,7 @@ function printMatchingRules() {
 }
 module.exports = {
     options,
+    showVersion,
     showHelp,
     validateOptions,
     printMatchingRules,

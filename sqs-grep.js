@@ -1,12 +1,14 @@
-const {options, validateOptions, printMatchingRules} = require('./options');
+const prompt = require('password-prompt')
 const AWS = require('aws-sdk');
+const {options, validateOptions, printMatchingRules} = require('./options');
 
-const sqs = new AWS.SQS(getSqsOptions());
+let sqs = new AWS.SQS();
 
 /**
  * Main processing loop
  */
 async function main() {
+    sqs = new AWS.SQS(await getSqsOptions());
     console.log(`Connecting to SQS queue '${options.queue}' in the '${options.region}' region...`)
     const sourceQueueUrl = (await sqs.getQueueUrl({
         QueueName: options.queue,
@@ -166,7 +168,7 @@ function nTimes(times, fn) {
  * Retrieves AWS SQS SDK options
  * @returns {Object} the options based on command-line arguments
  */
-function getSqsOptions() {
+async function getSqsOptions() {
     const opts = {
         region: options.region
     };
@@ -175,6 +177,10 @@ function getSqsOptions() {
     }
     if (options.secretAccessKey) {
         opts.secretAccessKey = options.secretAccessKey;
+    }
+    if (options.inputCredentials) {
+        opts.accessKeyId = await prompt('AWS access key id:');
+        opts.secretAccessKey = await prompt('AWS secret access key:');
     }
     return opts;
 }
