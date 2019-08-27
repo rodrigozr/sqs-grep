@@ -1,5 +1,7 @@
-const prompt = require('password-prompt')
+const prompt = require('password-prompt');
 const AWS = require('aws-sdk');
+const fs = require('fs');
+const os = require('os');
 const {options, validateOptions, printMatchingRules} = require('./options');
 
 let sqs = new AWS.SQS();
@@ -41,33 +43,38 @@ async function main() {
     console.log('Scanning...');
     const promises = nTimes(options.parallel, async () => {
         while (keepRunning()) {
-            const elapsedSeconds = parseInt((new Date().getTime() - startedAt) / 1000);
-            const res = await sqs.receiveMessage({
-                QueueUrl: sourceQueueUrl,
-                MaxNumberOfMessages: 10,
-                VisibilityTimeout: Math.max(1, options.timeout + 10 - elapsedSeconds),
-                MessageAttributeNames: ['All'],
-            }).promise();
-            if (!keepRunning()) {
-                break;
-            }
-            if (!res.Messages || !res.Messages.length) {
-                if (++emptyReceives < 5) {
-                    continue;
-                } else {
-                    break;
-                }
-            }
-            // Process received messages
-            qtyScanned += res.Messages.length;
-            for (let message of res.Messages) {
-                if (isMessageMatched(message)) {
-                    qtyMatched++;
-                    await processMatchedSqsMessage(message, sourceQueueUrl, targetQueueUrl);
-                    if (!keepRunning()) {
+            try {
+                const elapsedSeconds = parseInt((new Date().getTime() - startedAt) / 1000);
+                const res = await sqs.receiveMessage({
+                    QueueUrl: sourceQueueUrl,
+                    MaxNumberOfMessages: 10,
+                    VisibilityTimeout: Math.max(1, options.timeout + 10 - elapsedSeconds),
+                    MessageAttributeNames: ['All'],
+                }).promise();
+                if (!res.Messages || !res.Messages.length) {
+                    if (++emptyReceives < 5) {
+                        continue;
+                    } else {
                         break;
                     }
                 }
+                qtyScanned += res.Messages.length;
+                if (!keepRunning()) {
+                    break;
+                }
+                // Process received messages
+                for (let message of res.Messages) {
+                    if (isMessageMatched(message)) {
+                        qtyMatched++;
+                        await processMatchedSqsMessage(message, sourceQueueUrl, targetQueueUrl);
+                        if (!keepRunning()) {
+                            break;
+                        }
+                    }
+                }
+            } catch (error) {
+                running = false;
+                throw error;
             }
         }
     });
@@ -112,13 +119,20 @@ function printSqsMessage(message) {
     if (options.silent) {
         return;
     }
-    if (options.full) {
-        console.log(JSON.stringify({
-            Body: message.Body,
-            MessageAttributes: message.MessageAttributes
-        }));
+    const content = options.full ? JSON.stringify({
+        Body: message.Body,
+        MessageAttributes: message.MessageAttributes
+    }) : message.Body;
+    
+    if (options.outputFile) {
+        return new Promise((resolve, reject) => {
+            fs.appendFile(options.outputFile, content + os.EOL, {encoding: 'utf-8'}, err => {
+                if (err) reject(err);
+                else resolve();
+            });
+        });
     } else {
-        console.log(message.Body);
+        console.log(content);
     }
 }
 
@@ -129,7 +143,7 @@ function printSqsMessage(message) {
  * @param {String} targetQueueUrl target SQS queue URL (when --moveTo is set)
  */
 async function processMatchedSqsMessage(message, sourceQueueUrl, targetQueueUrl) {
-    printSqsMessage(message);
+    await printSqsMessage(message);
     if (options.moveTo) {
         if (!options.stripAttributes && message.MessageAttributes) {
             // Remove parameter values not supported yet

@@ -34,8 +34,9 @@ const optionDefinitions = [
     { name: 'maxMessages', alias: 'm', type: parseInt, defaultValue: 0, typeLabel: '{underline integer}', description: 'Maximum number of messages to match' },
     { name: 'parallel', alias: 'j', type: Number, defaultValue: 1, description: 'Number of parallel pollers to start (to speed-up the scan)' },
     { name: 'silent', alias: 's', type: Boolean, defaultValue: false, description: 'Does not print the message contents (only count them)' },
-    { name: 'full', alias: 'f', type: Boolean, defaultValue: false, description: 'Prints the full message content (Body and all MessageAttributes)\nBy default, only the message body is printed' },
+    { name: 'full', alias: 'f', type: Boolean, defaultValue: false, description: 'Prints a JSON with the full message content (Body and all MessageAttributes)\nBy default, only the message body is printed' },
     { name: 'stripAttributes', type: Boolean, defaultValue: false, description: 'When {bold --moveTo} is set, this option will cause all message attributes to be stripped when moving it to the target queue' },
+    { name: 'outputFile', alias: 'o', typeLabel: '{underline file}', description: 'Write matched messages to the given output file instead of the console. Combine with {bold --full} to have exact message reproduction, one per line in the output file' },
     { name: 'help', alias: 'h', type: Boolean, defaultValue: false, description: 'Prints this help message' },
     { name: 'version', alias: 'v', type: Boolean, defaultValue: false, description: 'Prints the application version' },
 ];
