@@ -24,6 +24,7 @@ const optionDefinitions = [
     { name: 'attribute', alias: 'a', group: 'main', multiple: true, type: parseAttribute, typeLabel: '{underline attr}={underline regexp}', description: 'Matches a message attribute\nYou can set this option multiple times to match multiple attributes' },
     { name: 'delete', type: Boolean, group: 'main', description: 'Deletes matched messages from the queue (use with caution)' },
     { name: 'moveTo', typeLabel: '{underline queue name}', group: 'main', description: 'Moves matched messages to the given destination queue' },
+    { name: 'all', type: Boolean, group: 'main', description: 'Matches all messages in the queue (do not filter anything). Setting this flag overrides {bold --body} and {bold --attribute}' },
     // Credentials
     { name: 'inputCredentials', alias: 'i', type: Boolean, description: 'Input the AWS access key id and secret access key via {underline stdin}', group: 'credentials' },
     { name: 'accessKeyId', description: 'AWS access key id ({bold not recommended:} use "aws configure" or "--inputCredentials" instead)', group: 'credentials' },
@@ -74,7 +75,7 @@ const usage = [
             + `$ ./sqs-grep --queue MyQueue --negate --attribute "Error=\\\\\\\\d\\{3\\}"\n`
             + `\n`
             + `{italic Move all messages from one queue to another}\n`
-            + `$ ./sqs-grep --queue MyQueue --moveTo DestQueue --body ^\n`
+            + `$ ./sqs-grep --queue MyQueue --moveTo DestQueue --all\n`
             + `\n`
             + `{italic Delete all messages containing the text 'Error' in the body}\n`
             + `$ ./sqs-grep --queue MyQueue --delete --body Error\n`
@@ -119,13 +120,13 @@ function validateOptions() {
         return false;
     }
     if (!options.queue) {
-        console.log("ERROR: You must specify --queue");
-        showHelp();
+        console.log(chalk`{red ERROR: You must specify {bold --queue}}`);
+        console.log(chalk`{italic (See all options by specifying {bold --help} in the command-line)}`)
         return false;
     }
-    if (!options.body && (!options.attribute || !options.attribute.length)) {
-        console.log("ERROR: You must specify at least one of --body or --attribute!");
-        showHelp();
+    if (!options.all && !options.body && (!options.attribute || !options.attribute.length)) {
+        console.log(chalk`{red ERROR: You must specify at least one of {bold --all}, {bold --body}, or {bold --attribute}}`);
+        console.log(chalk`{italic (See all options by specifying {bold --help} in the command-line)}`)
         return false;
     }
     return true;
@@ -134,6 +135,10 @@ function validateOptions() {
 function printMatchingRules() {
     const containing = options.negate ? chalk.red('not containing') : 'containing';
     const match = options.moveTo ? chalk.green('move') : options.delete ? chalk.red('DELETE') : 'match';
+    if (options.all) {
+        console.log(chalk`Will ${match} {bold ALL} messages in the queue.`);
+        return;
+    }
     if (options.body) {
         console.log(chalk`Will ${match} messages ${containing} the RegExp {green ${options.body}} in its body.`);
     }

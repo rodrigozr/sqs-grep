@@ -95,7 +95,9 @@ async function main() {
  * @returns {Boolean} true if it matches
  */
 function isMessageMatched(message) {
-    // If we have a body match expression, check that one first
+    if (options.all) {
+        return true;
+    }
     if (options.body && negate(options.body.test(message.Body))) {
         return true;
     }

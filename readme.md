@@ -11,7 +11,7 @@ It can also optionally delete the matching messages or move them to another SQS 
 * Dump matched messages to file
 * Move matched messages to another SQS queue
 * Delete matched messages
-* Parallel scan for higher troughput
+* Parallel scan for higher throughput
 * Cross-platform, with pre-built binaries for Linux, MacOS and Windows
 
 # Usage examples
@@ -32,7 +32,7 @@ $ ./sqs-grep --queue MyQueue --negate --attribute "Error=\\d{3}"
 
 Move all messages from one queue to another
 ```
-$ ./sqs-grep --queue MyQueue --moveTo DestQueue --body ^
+$ ./sqs-grep --queue MyQueue --moveTo DestQueue --all
 ```
 
 Delete all messages containing the text 'Error' in the body
@@ -67,7 +67,7 @@ $ ./sqs-grep --accessKeyId "KEY" --secretAccessKey "SECRET" <other options>
 ```
 $ ./sqs-grep --help
 
-sqs-grep version 1.2
+sqs-grep version 1.4
 
 sqs-grep
 
@@ -83,6 +83,8 @@ Main options
                                 You can set this option multiple times to match multiple attributes           
   --delete                      Deletes matched messages from the queue (use with caution)                    
   --moveTo queue name           Moves matched messages to the given destination queue                         
+  --all                         Matches all messages in the queue (do not filter anything). Setting this flag 
+                                overrides --body and --attribute                                              
 
 Credential options
 
@@ -100,13 +102,16 @@ Other options
                               The message visibility timeout will be calculated based on this value as well 
                               and the elapsed time to ensure that messages become visible again as soon as  
                               possible.                                                                     
-  -m, --maxMessages integer   Maximum number of messages to match                                          
+  -m, --maxMessages integer   Maximum number of messages to match                                           
   -j, --parallel number       Number of parallel pollers to start (to speed-up the scan)                    
   -s, --silent                Does not print the message contents (only count them)                         
-  -f, --full                  Prints the full message content (Body and all MessageAttributes)              
+  -f, --full                  Prints a JSON with the full message content (Body and all MessageAttributes)  
                               By default, only the message body is printed                                  
   --stripAttributes           When --moveTo is set, this option will cause all message attributes to be     
                               stripped when moving it to the target queue                                   
+  -o, --outputFile file       Write matched messages to the given output file instead of the console.       
+                              Combine with --full to have exact message reproduction, one per line in the   
+                              output file                                                                   
   -h, --help                  Prints this help message                                                      
   -v, --version               Prints the application version                                                
 
@@ -123,8 +128,8 @@ Usage examples
   $ ./sqs-grep --queue MyQueue --negate --attribute "Error=\\d{3}"              
                                                                                 
   Move all messages from one queue to another                                   
-  $ ./sqs-grep --queue MyQueue --moveTo DestQueue --body ^                      
+  $ ./sqs-grep --queue MyQueue --moveTo DestQueue --all                         
                                                                                 
   Delete all messages containing the text 'Error' in the body                   
-  $ ./sqs-grep --queue MyQueue --delete --body Error                            
+  $ ./sqs-grep --queue MyQueue --delete --body Error
 ```
