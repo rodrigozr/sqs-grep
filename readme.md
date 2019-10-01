@@ -1,8 +1,18 @@
 # AWS SQS grep
-Command-line tool used to scan thru an AWS SQS queue and find messages matching a certain criteria.
+Powerful command-line tool used to scan thru an AWS SQS queue and find messages matching a certain criteria.
 It can also optionally delete the matching messages or move them to another SQS queue.
 
 [Download pre-built binaries here](https://github.com/rodrigozr/sqs-grep/releases)
+
+## Features
+* Find messages matching (or NOT matching) a regular expression
+* Search by message attributes
+* Silent mode if you just want to count the number of matched messages
+* Dump matched messages to file
+* Move matched messages to another SQS queue
+* Delete matched messages
+* Parallel scan for higher troughput
+* Cross-platform, with pre-built binaries for Linux, MacOS and Windows
 
 # Usage examples
 Find messages containing the text 'Error' in the body:
