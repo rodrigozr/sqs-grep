@@ -1,15 +1,20 @@
 {
   "name": "sqs-grep",
   "version": "1.5.0",
-  "description": "Greps AWS SQS Messages from the command-line",
+  "description": "Greps AWS SQS messages from the command-line, optionally moving or deleting them",
   "main": "sqs-grep.js",
   "bin": {
     "sqs-grep": "sqs-grep.js"
   },
   "scripts": {
-    "test": "echo \"Error: no test specified\" && exit 1",
+    "test": "node sqs-grep.js -v && npm run build",
     "build": "cd build && ./build.sh"
   },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/rodrigozr/sqs-grep.git"
+  },
+  "homepage": "https://github.com/rodrigozr/sqs-grep",
   "keywords": [
     "aws",
     "sqs",
@@ -25,5 +30,8 @@
     "command-line-args": "^5.1.1",
     "command-line-usage": "^6.0.2",
     "password-prompt": "^1.1.2"
+  },
+  "devDependencies": {
+    "pkg": "^4.4.0"
   }
 }

@@ -1,6 +1,6 @@
 #!/bin/sh
 rm sqs-grep sqs-grep.exe sqs-grep-* > /dev/null 2> /dev/null
-pkg ../ || exit 1
+pkg ../ -t node10-linux-x64,node10-macos-x64,node10-win-x64 || exit 1
 
 # Linux
 mv sqs-grep-linux sqs-grep
