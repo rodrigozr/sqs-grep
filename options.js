@@ -1,7 +1,7 @@
 const commandLineArgs = require('command-line-args');
 const commandLineUsage = require('command-line-usage');
 const chalk = require('chalk');
-const {version} = require('./version');
+const {version} = require('./package.json');
 
 /**
  * Parses a command-line "--attribute" argument into an attribute matching definition

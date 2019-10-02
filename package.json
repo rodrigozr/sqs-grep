@@ -1,11 +1,14 @@
 {
   "name": "sqs-grep",
-  "version": "1.0.0",
+  "version": "1.5.0",
   "description": "Greps AWS SQS Messages from the command-line",
   "main": "sqs-grep.js",
-  "bin": "sqs-grep.js",
+  "bin": {
+    "sqs-grep": "sqs-grep.js"
+  },
   "scripts": {
-    "test": "echo \"Error: no test specified\" && exit 1"
+    "test": "echo \"Error: no test specified\" && exit 1",
+    "build": "cd build && ./build.sh"
   },
   "keywords": [
     "aws",

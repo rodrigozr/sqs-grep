@@ -1,3 +1,5 @@
+#! /usr/bin/env node
+
 const prompt = require('password-prompt');
 const AWS = require('aws-sdk');
 const fs = require('fs');
