@@ -19,27 +19,27 @@ It can also optionally delete the matching messages or move them to another SQS 
 # Usage examples
 Find messages containing the text 'Error' in the body:
 ```
-$ ./sqs-grep --queue MyQueue --body "Error"
+$ sqs-grep --queue MyQueue --body "Error"
 ```
 
 Find messages NOT containing any three-digit numbers in the body:
 ```
-$ ./sqs-grep --queue MyQueue --negate --body "\\d{3}"
+$ sqs-grep --queue MyQueue --negate --body "\\d{3}"
 ```
 
 Find messages containing a string attribute called 'Error' and that attribute does NOT contain any three-digit numbers in its value:     
 ```
-$ ./sqs-grep --queue MyQueue --negate --attribute "Error=\\d{3}"
+$ sqs-grep --queue MyQueue --negate --attribute "Error=\\d{3}"
 ```
 
 Move all messages from one queue to another
 ```
-$ ./sqs-grep --queue MyQueue --moveTo DestQueue --all
+$ sqs-grep --queue MyQueue --moveTo DestQueue --all
 ```
 
 Delete all messages containing the text 'Error' in the body
 ```
-$ ./sqs-grep --queue MyQueue --delete --body Error
+$ sqs-grep --queue MyQueue --delete --body Error
 ```
 
 # Providing credentials
@@ -49,25 +49,25 @@ You also have the options below to provide credentials:
 
 ## Prompting for credentials
 ```
-$ ./sqs-grep --inputCredentials <other options>
+$ sqs-grep --inputCredentials <other options>
 ```
 
 ## Using an external credential provider
 You can use an external credential provider tool as long as it outputs two separated lines
 containing the AWS "access key id" and "secret access key" (in that order).
 ```
-$ get-aws-credentials | ./sqs-grep --inputCredentials <other options>
+$ get-aws-credentials | sqs-grep --inputCredentials <other options>
 ```
 
 ## Providing credentials in the command-line (not recommended)
 This option is simple, but not recommended as the credentials may be easily accessible by other processes
 ```
-$ ./sqs-grep --accessKeyId "KEY" --secretAccessKey "SECRET" <other options>
+$ sqs-grep --accessKeyId "KEY" --secretAccessKey "SECRET" <other options>
 ```
 
 # Options
 ```
-$ ./sqs-grep --help
+$ sqs-grep --help
 
 sqs-grep version 1.4
 
@@ -120,18 +120,18 @@ Other options
 Usage examples
 
   Find messages containing the text 'Error' in the body:                        
-  $ ./sqs-grep --queue MyQueue --body Error                                     
+  $ sqs-grep --queue MyQueue --body Error                                     
                                                                                 
   Find messages NOT containing any three-digit numbers in the body:             
-  $ ./sqs-grep --queue MyQueue --negate --body "\\d{3}"                         
+  $ sqs-grep --queue MyQueue --negate --body "\\d{3}"                         
                                                                                 
   Find messages containing a string attribute called 'Error' and that attribute 
   does NOT contain any three-digit numbers in its value:                        
-  $ ./sqs-grep --queue MyQueue --negate --attribute "Error=\\d{3}"              
+  $ sqs-grep --queue MyQueue --negate --attribute "Error=\\d{3}"              
                                                                                 
   Move all messages from one queue to another                                   
-  $ ./sqs-grep --queue MyQueue --moveTo DestQueue --all                         
+  $ sqs-grep --queue MyQueue --moveTo DestQueue --all                         
                                                                                 
   Delete all messages containing the text 'Error' in the body                   
-  $ ./sqs-grep --queue MyQueue --delete --body Error
+  $ sqs-grep --queue MyQueue --delete --body Error
 ```

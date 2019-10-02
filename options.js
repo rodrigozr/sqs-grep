@@ -66,19 +66,19 @@ const usage = [
     {
         header: 'Usage examples',
         content: `{italic Find messages containing the text 'Error' in the body:}\n`
-            + `$ ./sqs-grep --queue MyQueue --body Error\n`
+            + `$ sqs-grep --queue MyQueue --body Error\n`
             + `\n`
             + `{italic Find messages NOT containing any three-digit numbers in the body:}\n`
-            + `$ ./sqs-grep --queue MyQueue --negate --body "\\\\\\\\d\\{3\\}"\n`
+            + `$ sqs-grep --queue MyQueue --negate --body "\\\\\\\\d\\{3\\}"\n`
             + `\n`
             + `{italic Find messages containing a string attribute called 'Error' and that attribute does NOT contain any three-digit numbers in its value:}\n`
-            + `$ ./sqs-grep --queue MyQueue --negate --attribute "Error=\\\\\\\\d\\{3\\}"\n`
+            + `$ sqs-grep --queue MyQueue --negate --attribute "Error=\\\\\\\\d\\{3\\}"\n`
             + `\n`
             + `{italic Move all messages from one queue to another}\n`
-            + `$ ./sqs-grep --queue MyQueue --moveTo DestQueue --all\n`
+            + `$ sqs-grep --queue MyQueue --moveTo DestQueue --all\n`
             + `\n`
             + `{italic Delete all messages containing the text 'Error' in the body}\n`
-            + `$ ./sqs-grep --queue MyQueue --delete --body Error\n`
+            + `$ sqs-grep --queue MyQueue --delete --body Error\n`
     },
 ];
 
