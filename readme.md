@@ -17,6 +17,7 @@ It can also optionally delete the matching messages or move them to another SQS 
 * Silent mode if you just want to count the number of matched messages
 * Dump matched messages to file
 * Move matched messages to another SQS queue
+* Copy matched messages to another SQS queue
 * Delete matched messages
 * Parallel scan for higher throughput
 * Cross-platform, with pre-built binaries for Linux, MacOS and Windows
@@ -74,7 +75,7 @@ $ sqs-grep --accessKeyId "KEY" --secretAccessKey "SECRET" <other options>
 ```
 $ sqs-grep --help
 
-sqs-grep version 1.4
+sqs-grep version 1.6.0
 
 sqs-grep
 
@@ -88,8 +89,9 @@ Main options
   -b, --body regexp             Optional regular expression pattern to match the message body                 
   -a, --attribute attr=regexp   Matches a message attribute                                                   
                                 You can set this option multiple times to match multiple attributes           
-  --delete                      Deletes matched messages from the queue (use with caution)                    
-  --moveTo queue name           Moves matched messages to the given destination queue                         
+  --delete                      Delete matched messages from the queue (use with caution)                     
+  --moveTo queue name           Move matched messages to the given destination queue                          
+  --copyTo queue name           Copy matched messages to the given destination queue                          
   --all                         Matches all messages in the queue (do not filter anything). Setting this flag 
                                 overrides --body and --attribute                                              
 
@@ -125,18 +127,19 @@ Other options
 Usage examples
 
   Find messages containing the text 'Error' in the body:                        
-  $ sqs-grep --queue MyQueue --body Error                                     
+  $ sqs-grep --queue MyQueue --body Error                                       
                                                                                 
   Find messages NOT containing any three-digit numbers in the body:             
-  $ sqs-grep --queue MyQueue --negate --body "\\d{3}"                         
+  $ sqs-grep --queue MyQueue --negate --body "\\d{3}"                           
                                                                                 
   Find messages containing a string attribute called 'Error' and that attribute 
   does NOT contain any three-digit numbers in its value:                        
-  $ sqs-grep --queue MyQueue --negate --attribute "Error=\\d{3}"              
+  $ sqs-grep --queue MyQueue --negate --attribute "Error=\\d{3}"                
                                                                                 
   Move all messages from one queue to another                                   
-  $ sqs-grep --queue MyQueue --moveTo DestQueue --all                         
+  $ sqs-grep --queue MyQueue --moveTo DestQueue --all                           
                                                                                 
   Delete all messages containing the text 'Error' in the body                   
-  $ sqs-grep --queue MyQueue --delete --body Error
+  $ sqs-grep --queue MyQueue --delete --body Error                              
+
 ```

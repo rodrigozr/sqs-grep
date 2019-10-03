@@ -1,5 +1,8 @@
 #!/bin/sh
 
+# Fast-fail smoke test
+src/sqs-grep.js --version || exit 1
+
 # Run the tests with code coverage
 ./node_modules/.bin/istanbul cover \
     ./node_modules/mocha/bin/mocha --report lcovonly -- -R spec || exit 1
