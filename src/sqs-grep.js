@@ -4,9 +4,10 @@ const prompt = require('password-prompt');
 const AWS = require('aws-sdk');
 const fs = require('fs');
 const os = require('os');
-const {options, validateOptions, printMatchingRules} = require('./options');
+const {parseOptions, validateOptions, printMatchingRules} = require('./options');
 
 let sqs = new AWS.SQS();
+const options = parseOptions();
 
 /**
  * Main processing loop

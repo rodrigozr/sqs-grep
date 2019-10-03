@@ -1,7 +1,7 @@
 const commandLineArgs = require('command-line-args');
 const commandLineUsage = require('command-line-usage');
 const chalk = require('chalk');
-const {version} = require('./package.json');
+const {version} = require('../package.json');
 
 /**
  * Parses a command-line "--attribute" argument into an attribute matching definition
@@ -85,7 +85,17 @@ const usage = [
 /**
  * All command-line options in a single object
  */
-const options = commandLineArgs(optionDefinitions)._all;
+let options = null;
+
+/**
+ * Parses command-line arguments
+ * @param {Array} argv optional arguments
+ * @returns {Object} parsed options
+ */
+function parseOptions(argv) {
+    options = commandLineArgs(optionDefinitions, {argv})._all;
+    return options;
+}
 
 /**
  * Prints the application version to the console
@@ -149,7 +159,7 @@ function printMatchingRules() {
     }
 }
 module.exports = {
-    options,
+    parseOptions,
     showVersion,
     showHelp,
     validateOptions,

@@ -1,6 +1,8 @@
 # AWS SQS grep 
 [![npm version](https://badge.fury.io/js/sqs-grep.svg)](https://badge.fury.io/js/sqs-grep)
 [![Build Status](https://travis-ci.org/rodrigozr/sqs-grep.svg?branch=master)](https://travis-ci.org/rodrigozr/sqs-grep)
+[![Coverage Status](https://coveralls.io/repos/github/rodrigozr/sqs-grep/badge.svg?branch=master)](https://coveralls.io/github/rodrigozr/sqs-grep?branch=master)
+[![License: MIT](https://img.shields.io/badge/License-MIT-green.svg)](https://opensource.org/licenses/MIT)
 
 Powerful command-line tool used to scan thru an AWS SQS queue and find messages matching a certain criteria.
 It can also optionally delete the matching messages or move them to another SQS queue.
