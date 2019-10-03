@@ -22,8 +22,9 @@ const optionDefinitions = [
     { name: 'region', alias: 'r', defaultValue: 'us-east-1', description: 'AWS region name', group: 'main' },
     { name: 'body', alias: 'b', type: RegExp, group: 'main', description: 'Optional regular expression pattern to match the message body' },
     { name: 'attribute', alias: 'a', group: 'main', multiple: true, type: parseAttribute, typeLabel: '{underline attr}={underline regexp}', description: 'Matches a message attribute\nYou can set this option multiple times to match multiple attributes' },
-    { name: 'delete', type: Boolean, group: 'main', description: 'Deletes matched messages from the queue (use with caution)' },
-    { name: 'moveTo', typeLabel: '{underline queue name}', group: 'main', description: 'Moves matched messages to the given destination queue' },
+    { name: 'delete', type: Boolean, group: 'main', description: 'Delete matched messages from the queue (use with caution)' },
+    { name: 'moveTo', typeLabel: '{underline queue name}', group: 'main', description: 'Move matched messages to the given destination queue' },
+    { name: 'copyTo', typeLabel: '{underline queue name}', group: 'main', description: 'Copy matched messages to the given destination queue' },
     { name: 'all', type: Boolean, group: 'main', description: 'Matches all messages in the queue (do not filter anything). Setting this flag overrides {bold --body} and {bold --attribute}' },
     // Credentials
     { name: 'inputCredentials', alias: 'i', type: Boolean, description: 'Input the AWS access key id and secret access key via {underline stdin}', group: 'credentials' },
@@ -139,12 +140,21 @@ function validateOptions() {
         console.log(chalk`{italic (See all options by specifying {bold --help} in the command-line)}`)
         return false;
     }
+    if (options.copyTo && options.delete) {
+        console.log(chalk`{red ERROR: You can't specify both {bold --copyTo} and {bold --delete}! Use {bold --moveTo} instead}`);
+        console.log(chalk`{italic (See all options by specifying {bold --help} in the command-line)}`)
+        return false;
+    }
     return true;
 }
 
 function printMatchingRules() {
     const containing = options.negate ? chalk.red('not containing') : 'containing';
-    const match = options.moveTo ? chalk.green('move') : options.delete ? chalk.red('DELETE') : 'match';
+    const match = (options.moveTo && options.copyTo) ? chalk.green('copy and move') :
+        options.moveTo ? chalk.green('move') :
+        options.copyTo ? chalk.green('copy') :
+        options.delete ? chalk.red('DELETE') :
+        'match';
     if (options.all) {
         console.log(chalk`Will ${match} {bold ALL} messages in the queue.`);
         return;

@@ -47,6 +47,11 @@ describe('Options', function () {
             assert.equal(validateOptions(), false);
             assert.equal(hasLog(/--all.*--body.*--attribute/), true);
         });
+        it('should not allow both --copyTo and --delete', function () {
+            parseOptions(['--queue', 'TestQueue', '--all', '--copyTo=A', '--delete']);
+            assert.equal(validateOptions(), false);
+            assert.equal(hasLog(/ERROR: You can't specify both .*--copyTo.* and .*--delete.*/), true);
+        });
         [['--all'], ['--body', 'Test'], ['--attribute', 'key=val']].forEach(arg => {
             it(`should pass with ${arg[0]}`, function () {
                 parseOptions(['--queue', 'TestQueue', ...arg]);
@@ -72,6 +77,8 @@ describe('Options', function () {
             [['--body=Test', '--delete'], /Will .*DELETE.* messages containing the RegExp .*\/Test\/.* in its body/],
             [['--body=Test', '--delete', '--negate'], /Will .*DELETE.* messages .*not containing.* the RegExp .*\/Test\/.* in its body/],
             [['--body=Test', '--moveTo=A'], /Will .*move.* messages containing the RegExp .*\/Test\/.* in its body/],
+            [['--body=Test', '--copyTo=A'], /Will .*copy.* messages containing the RegExp .*\/Test\/.* in its body/],
+            [['--body=Test', '--copyTo=A', '--moveTo=B'], /Will .*copy and move.* messages containing the RegExp .*\/Test\/.* in its body/],
             [
                 ['--attribute=key=val'],
                 /Will match messages containing an attribute named '.*key.*' with its value containing the RegExp .*\/val\/.*/

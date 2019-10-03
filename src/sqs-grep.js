@@ -15,19 +15,24 @@ const options = parseOptions();
 async function main() {
     sqs = new AWS.SQS(await getSqsOptions());
     console.log(`Connecting to SQS queue '${options.queue}' in the '${options.region}' region...`)
-    const sourceQueueUrl = (await sqs.getQueueUrl({
+    options.sourceQueueUrl = (await sqs.getQueueUrl({
         QueueName: options.queue,
     }).promise()).QueueUrl;
     const queueAttributes = await sqs.getQueueAttributes({
-        QueueUrl: sourceQueueUrl,
+        QueueUrl: options.sourceQueueUrl,
         AttributeNames: ['ApproximateNumberOfMessages']
     }).promise();
     console.log(`This queue has approximately ${queueAttributes.Attributes.ApproximateNumberOfMessages} messages at the moment.`);
-    let targetQueueUrl = null;
     if (options.moveTo) {
         console.log(`Connecting to target SQS queue '${options.moveTo}' in the '${options.region}' region...`);
-        targetQueueUrl = (await sqs.getQueueUrl({
+        options.moveToQueueUrl = (await sqs.getQueueUrl({
             QueueName: options.moveTo,
+        }).promise()).QueueUrl;
+    }
+    if (options.copyTo) {
+        console.log(`Connecting to target SQS queue '${options.copyTo}' in the '${options.region}' region...`);
+        options.copyToQueueUrl = (await sqs.getQueueUrl({
+            QueueName: options.copyTo,
         }).promise()).QueueUrl;
     }
     const startedAt = new Date().getTime();
@@ -49,7 +54,7 @@ async function main() {
             try {
                 const elapsedSeconds = parseInt((new Date().getTime() - startedAt) / 1000);
                 const res = await sqs.receiveMessage({
-                    QueueUrl: sourceQueueUrl,
+                    QueueUrl: options.sourceQueueUrl,
                     MaxNumberOfMessages: 10,
                     VisibilityTimeout: Math.max(1, options.timeout + 10 - elapsedSeconds),
                     MessageAttributeNames: ['All'],
@@ -69,7 +74,7 @@ async function main() {
                 for (let message of res.Messages) {
                     if (isMessageMatched(message)) {
                         qtyMatched++;
-                        await processMatchedSqsMessage(message, sourceQueueUrl, targetQueueUrl);
+                        await processMatchedSqsMessage(message);
                         if (!keepRunning()) {
                             break;
                         }
@@ -144,12 +149,10 @@ function printSqsMessage(message) {
 /**
  * Prints an SQS message to the console, based on the options
  * @param {Object} message SQS message
- * @param {String} sourceQueueUrl source SQS queue URL
- * @param {String} targetQueueUrl target SQS queue URL (when --moveTo is set)
  */
-async function processMatchedSqsMessage(message, sourceQueueUrl, targetQueueUrl) {
+async function processMatchedSqsMessage(message) {
     await printSqsMessage(message);
-    if (options.moveTo) {
+    if (options.moveTo || options.copyTo) {
         if (!options.stripAttributes && message.MessageAttributes) {
             // Remove parameter values not supported yet
             for (let key in message.MessageAttributes) {
@@ -157,17 +160,20 @@ async function processMatchedSqsMessage(message, sourceQueueUrl, targetQueueUrl)
                 delete message.MessageAttributes[key].BinaryListValues;
             }
         }
-        // Copy the message to the target queue
-        await sqs.sendMessage({
-            QueueUrl: targetQueueUrl,
-            MessageBody: message.Body,
-            MessageAttributes: options.stripAttributes ? null : message.MessageAttributes,
-        }).promise();
+        // Copy the message to the target queues
+        const targetUrls = [options.moveToQueueUrl, options.copyToQueueUrl].filter(url => url);
+        for (let url of targetUrls) {
+            await sqs.sendMessage({
+                QueueUrl: url,
+                MessageBody: message.Body,
+                MessageAttributes: options.stripAttributes ? null : message.MessageAttributes,
+            }).promise();
+        }
     }
     if (options.delete || options.moveTo) {
         // Delete the source message
         await sqs.deleteMessage({
-            QueueUrl: sourceQueueUrl,
+            QueueUrl: options.sourceQueueUrl,
             ReceiptHandle: message.ReceiptHandle
         }).promise();
     }
