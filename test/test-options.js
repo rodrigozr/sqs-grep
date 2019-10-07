@@ -51,6 +51,28 @@ describe('Options', function () {
             assert.equal(validateOptions(options, log), false);
             assert.equal(hasLog(/ERROR: You can't specify both .*--copyTo.* and .*--delete.*/), true);
         });
+        it('should not allow missing --parallel', function () {
+            const options = parseOptions(['--queue', 'TestQueue', '--all']);
+            options.parallel = undefined;
+            assert.equal(validateOptions(options, log), false);
+            assert.equal(hasLog(/ERROR: Invalid .*--parallel.* value \(must be greater than 0\)/), true);
+        });
+        it('should not allow invalid --parallel', function () {
+            const options = parseOptions(['--queue', 'TestQueue', '--all', '--parallel', '0']);
+            assert.equal(validateOptions(options, log), false);
+            assert.equal(hasLog(/ERROR: Invalid .*--parallel.* value \(must be greater than 0\)/), true);
+        });
+        it('should not allow missing --timeout', function () {
+            const options = parseOptions(['--queue', 'TestQueue', '--all']);
+            options.timeout = undefined;
+            assert.equal(validateOptions(options, log), false);
+            assert.equal(hasLog(/ERROR: Invalid .*--timeout.* value \(must be greater than 0\)/), true);
+        });
+        it('should not allow invalid --timeout', function () {
+            const options = parseOptions(['--queue', 'TestQueue', '--all', '--timeout', '0']);
+            assert.equal(validateOptions(options, log), false);
+            assert.equal(hasLog(/ERROR: Invalid .*--timeout.* value \(must be greater than 0\)/), true);
+        });
         [['--all'], ['--body', 'Test'], ['--attribute', 'key=val']].forEach(arg => {
             it(`should pass with ${arg[0]}`, function () {
                 const options = parseOptions(['--queue', 'TestQueue', ...arg]);

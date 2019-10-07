@@ -129,20 +129,25 @@ function validateOptions(options, log) {
         showVersion(log);
         return false;
     }
-    if (!options.queue) {
-        log(chalk`{red ERROR: You must specify {bold --queue}}`);
+    const error = msg => {
+        log(msg);
         log(chalk`{italic (See all options by specifying {bold --help} in the command-line)}`)
         return false;
+    }
+    if (!options.queue) {
+        return error(chalk`{red ERROR: You must specify {bold --queue}}`);
     }
     if (!options.all && !options.body && (!options.attribute || !options.attribute.length)) {
-        log(chalk`{red ERROR: You must specify at least one of {bold --all}, {bold --body}, or {bold --attribute}}`);
-        log(chalk`{italic (See all options by specifying {bold --help} in the command-line)}`)
-        return false;
+        return error(chalk`{red ERROR: You must specify at least one of {bold --all}, {bold --body}, or {bold --attribute}}`);
     }
     if (options.copyTo && options.delete) {
-        log(chalk`{red ERROR: You can't specify both {bold --copyTo} and {bold --delete}! Use {bold --moveTo} instead}`);
-        log(chalk`{italic (See all options by specifying {bold --help} in the command-line)}`)
-        return false;
+        return error(chalk`{red ERROR: You can't specify both {bold --copyTo} and {bold --delete}! Use {bold --moveTo} instead}`);
+    }
+    if (!(options.parallel > 0)) {
+        return error(chalk`{red ERROR: Invalid {bold --parallel} value (must be greater than 0)}`);
+    }
+    if (!(options.timeout > 0)) {
+        return error(chalk`{red ERROR: Invalid {bold --timeout} value (must be greater than 0)}`);
     }
     return true;
 }
