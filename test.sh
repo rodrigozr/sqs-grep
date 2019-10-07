@@ -1,7 +1,7 @@
 #!/bin/sh
 
 # Fast-fail smoke test
-src/sqs-grep.js --version || exit 1
+src/main.js --version || exit 1
 
 # Run the tests with code coverage
 ./node_modules/.bin/istanbul cover \

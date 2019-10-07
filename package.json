@@ -1,10 +1,10 @@
 {
   "name": "sqs-grep",
-  "version": "1.6.0",
+  "version": "1.6.1",
   "description": "Greps AWS SQS messages from the command-line, optionally moving or deleting them",
-  "main": "src/sqs-grep.js",
+  "main": "src/main.js",
   "bin": {
-    "sqs-grep": "src/sqs-grep.js"
+    "sqs-grep": "src/main.js"
   },
   "scripts": {
     "test": "./test.sh && npm run build",
@@ -34,7 +34,7 @@
   },
   "devDependencies": {
     "coveralls": "^3.0.6",
-    "istanbul": "^0.4.5",
+    "istanbul": "^1.1.0-alpha.1",
     "mocha": "^6.2.1",
     "mocha-lcov-reporter": "^1.3.0",
     "pkg": "^4.4.0",

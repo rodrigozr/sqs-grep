@@ -84,33 +84,30 @@ const usage = [
 ];
 
 /**
- * All command-line options in a single object
- */
-let options = null;
-
-/**
  * Parses command-line arguments
  * @param {Array} argv optional arguments
  * @returns {Object} parsed options
  */
 function parseOptions(argv) {
-    options = commandLineArgs(optionDefinitions, {argv})._all;
+    const options = commandLineArgs(optionDefinitions, {argv})._all;
     return options;
 }
 
 /**
  * Prints the application version to the console
+ * @param {Function} log logger to use
  */
-function showVersion() {
-    console.log(`sqs-grep version ${version}`);
+function showVersion(log) {
+    log(`sqs-grep version ${version}`);
 }
 
 /**
  * Prints the command-line help to the console
+ * @param {Function} log logger to use
  */
-function showHelp() {
-    showVersion();
-    console.log(commandLineUsage(usage));
+function showHelp(log) {
+    showVersion(log);
+    log(commandLineUsage(usage));
 }
 
 /**
@@ -119,36 +116,43 @@ function showHelp() {
  * 
  * If the options are not valid, this will print the error and usage help
  * and will return false.
+ * @param {*} options parsed options
+ * @param {Function} log logger to use
  * @returns {Boolean} true if we can proceed
  */
-function validateOptions() {
+function validateOptions(options, log) {
     if (options.help) {
-        showHelp();
+        showHelp(log);
         return false;
     }
     if (options.version) {
-        showVersion();
+        showVersion(log);
         return false;
     }
     if (!options.queue) {
-        console.log(chalk`{red ERROR: You must specify {bold --queue}}`);
-        console.log(chalk`{italic (See all options by specifying {bold --help} in the command-line)}`)
+        log(chalk`{red ERROR: You must specify {bold --queue}}`);
+        log(chalk`{italic (See all options by specifying {bold --help} in the command-line)}`)
         return false;
     }
     if (!options.all && !options.body && (!options.attribute || !options.attribute.length)) {
-        console.log(chalk`{red ERROR: You must specify at least one of {bold --all}, {bold --body}, or {bold --attribute}}`);
-        console.log(chalk`{italic (See all options by specifying {bold --help} in the command-line)}`)
+        log(chalk`{red ERROR: You must specify at least one of {bold --all}, {bold --body}, or {bold --attribute}}`);
+        log(chalk`{italic (See all options by specifying {bold --help} in the command-line)}`)
         return false;
     }
     if (options.copyTo && options.delete) {
-        console.log(chalk`{red ERROR: You can't specify both {bold --copyTo} and {bold --delete}! Use {bold --moveTo} instead}`);
-        console.log(chalk`{italic (See all options by specifying {bold --help} in the command-line)}`)
+        log(chalk`{red ERROR: You can't specify both {bold --copyTo} and {bold --delete}! Use {bold --moveTo} instead}`);
+        log(chalk`{italic (See all options by specifying {bold --help} in the command-line)}`)
         return false;
     }
     return true;
 }
 
-function printMatchingRules() {
+/**
+ * prints the matching rules for the given parsed options
+ * @param {*} options parsed options
+ * @param {Function} log logger to use
+ */
+function printMatchingRules(options, log) {
     const containing = options.negate ? chalk.red('not containing') : 'containing';
     const match = (options.moveTo && options.copyTo) ? chalk.green('copy and move') :
         options.moveTo ? chalk.green('move') :
@@ -156,15 +160,15 @@ function printMatchingRules() {
         options.delete ? chalk.red('DELETE') :
         'match';
     if (options.all) {
-        console.log(chalk`Will ${match} {bold ALL} messages in the queue.`);
+        log(chalk`Will ${match} {bold ALL} messages in the queue.`);
         return;
     }
     if (options.body) {
-        console.log(chalk`Will ${match} messages ${containing} the RegExp {green ${options.body}} in its body.`);
+        log(chalk`Will ${match} messages ${containing} the RegExp {green ${options.body}} in its body.`);
     }
     if (options.attribute) {
         for (let attribute of options.attribute) {
-            console.log(chalk`Will ${match} messages containing an attribute named '{green ${attribute.attr}}' with its value ${containing} the RegExp {green ${attribute.regexp}}.`);
+            log(chalk`Will ${match} messages containing an attribute named '{green ${attribute.attr}}' with its value ${containing} the RegExp {green ${attribute.regexp}}.`);
         }
     }
 }
