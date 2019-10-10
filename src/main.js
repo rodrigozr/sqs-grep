@@ -39,6 +39,9 @@ async function getSqsOptions(options) {
         opts.accessKeyId = await prompt('AWS access key id:');
         opts.secretAccessKey = await prompt('AWS secret access key:');
     }
+    if (options.endpointUrl) {
+        opts.endpoint = new AWS.Endpoint(options.endpointUrl);
+    }
     return opts;
 }
 

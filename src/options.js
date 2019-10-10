@@ -39,6 +39,7 @@ const optionDefinitions = [
     { name: 'full', alias: 'f', type: Boolean, defaultValue: false, description: 'Prints a JSON with the full message content (Body and all MessageAttributes)\nBy default, only the message body is printed' },
     { name: 'stripAttributes', type: Boolean, defaultValue: false, description: 'When {bold --moveTo} is set, this option will cause all message attributes to be stripped when moving it to the target queue' },
     { name: 'outputFile', alias: 'o', typeLabel: '{underline file}', description: 'Write matched messages to the given output file instead of the console. Combine with {bold --full} to have exact message reproduction, one per line in the output file' },
+    { name: 'endpointUrl', typeLabel: '{underline URL}', description: 'Use a custom AWS endpoint URL' },
     { name: 'help', alias: 'h', type: Boolean, defaultValue: false, description: 'Prints this help message' },
     { name: 'version', alias: 'v', type: Boolean, defaultValue: false, description: 'Prints the application version' },
 ];

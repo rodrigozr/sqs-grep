@@ -9,6 +9,7 @@
   "scripts": {
     "test": "./test.sh && npm run build",
     "test-only": "./test.sh",
+    "integration-test": "RUN_INTEGRATION_TESTS=1 ./test.sh",
     "build": "cd build && ./build.sh",
     "snyk-ci": "snyk test && snyk monitor",
     "snyk-test": "snyk test",
