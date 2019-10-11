@@ -1,6 +1,6 @@
 {
   "name": "sqs-grep",
-  "version": "1.6.2",
+  "version": "1.6.3",
   "description": "Greps AWS SQS messages from the command-line, optionally moving or deleting them",
   "main": "src/main.js",
   "bin": {

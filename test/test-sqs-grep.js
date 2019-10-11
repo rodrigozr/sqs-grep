@@ -76,6 +76,49 @@ describe('SqsGrep', function () {
             assert.equal(res.qtyMatched, 3);
         });
 
+        it('should scan all messages with intermittent empty receives', async function () {
+            // arrange
+            const options = parseOptions(['--queue=A', '--all']);
+            const sqsGrep = new SqsGrep(sqs, options, emptyLog);
+            sqs.receiveMessage.onFirstCall().returns({
+                promise: () => Promise.resolve({Messages: [
+                    {Body: '1'},
+                ]})
+            });
+            [1,2,3,4].forEach(call => {
+                sqs.receiveMessage.onCall(call).returns({
+                    promise: () => Promise.resolve({Messages: []})
+                });
+            });
+            sqs.receiveMessage.onCall(5).returns({
+                promise: () => Promise.resolve({Messages: [
+                    {Body: '2'},
+                ]})
+            });
+            [6,7,8,9].forEach(call => {
+                sqs.receiveMessage.onCall(call).returns({
+                    promise: () => Promise.resolve({Messages: []})
+                });
+            });
+            sqs.receiveMessage.onCall(10).returns({
+                promise: () => Promise.resolve({Messages: [
+                    {Body: '3'},
+                ]})
+            });
+            [11,12,13,14,15].forEach(call => {
+                sqs.receiveMessage.onCall(call).returns({
+                    promise: () => Promise.resolve({Messages: []})
+                });
+            });
+            
+            // act
+            const res = await sqsGrep.run();
+
+            // assert
+            assert.equal(res.qtyScanned, 3);
+            assert.equal(res.qtyMatched, 3);
+        });        
+
         it('should filter messages', async function () {
             // arrange
             const options = parseOptions(['--queue=A', '--body=2']);

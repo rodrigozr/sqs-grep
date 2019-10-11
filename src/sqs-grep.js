@@ -60,6 +60,7 @@ class SqsGrep {
                             break;
                         }
                     }
+                    this.emptyReceives = 0;
                     this.qtyScanned += res.Messages.length;
                     if (!keepRunning()) {
                         break;
