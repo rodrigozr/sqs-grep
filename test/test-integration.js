@@ -40,8 +40,16 @@ describe('Integration Tests', function () {
             while (new Date().getTime() < deadline) {
                 let {stdout} = await exec(`docker logs ${containerName}`);
                 if (stdout.split('\n').includes('Ready.')) {
-                    return;
+                    // Ensure we can create a queue
+                    try {
+                        await sqs.createQueue({QueueName: 'ReadyTest'}).promise();
+                        // Success - the container is ready to be used!
+                        return;
+                    } catch {
+                    }
                 }
+                // Wait 100ms...
+                await new Promise(resolve => setTimeout(resolve, 100));
             }
             throw new Error('Could not start the docker container');
         } catch {
