@@ -117,7 +117,7 @@ class SqsGrep {
         }).promise();
         this.log(chalk`This queue has approximately {green ${queueAttributes.Attributes.ApproximateNumberOfMessages}} messages at the moment.`);
         if (this.options.moveTo) {
-            this.log(`Connecting to target SQS queue '{green ${this.options.moveTo}}' in the '{green ${this.options.region}}' region...`);
+            this.log(chalk`Connecting to target SQS queue '{green ${this.options.moveTo}}' in the '{green ${this.options.region}}' region...`);
             this.options.moveToQueueUrl = (await this.sqs.getQueueUrl({
                 QueueName: this.options.moveTo,
             }).promise()).QueueUrl;
