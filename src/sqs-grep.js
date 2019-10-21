@@ -25,7 +25,7 @@ class SqsGrep {
             ...options
         };
         this.options = options;
-        this.sqs = options.sqs || new AWS.SQS();
+        this.sqs = options.sqs || new AWS.SQS(SqsGrep._getAwsOptions(options));
         this.log = options.log || console.log;
         this.running = false;
         this.emptyReceives = 0;
@@ -111,6 +111,27 @@ class SqsGrep {
      */
     interrupt() {
         this.running = false;
+    }
+
+    /**
+     * Retrieves AWS SDK options
+     * @param {*} options sqs-grep options
+     * @returns {Object} the AWS options based on command-line arguments
+     */
+    static _getAwsOptions(options) {
+        const opts = {
+            region: options.region
+        };
+        if (options.accessKeyId) {
+            opts.accessKeyId = options.accessKeyId;
+        }
+        if (options.secretAccessKey) {
+            opts.secretAccessKey = options.secretAccessKey;
+        }
+        if (options.endpointUrl) {
+            opts.endpoint = new AWS.Endpoint(options.endpointUrl);
+        }
+        return opts;
     }
 
     /**

@@ -1,7 +1,6 @@
 #! /usr/bin/env node
 
 const prompt = require('password-prompt');
-const AWS = require('aws-sdk');
 const {parseOptions} = require('./options');
 const {SqsGrep} = require('./sqs-grep');
 
@@ -10,8 +9,8 @@ const {SqsGrep} = require('./sqs-grep');
  */
 async function main() {
     const options = parseOptions();
-    const sqs = new AWS.SQS(await getSqsOptions(options));
-    const sqsGrep = new SqsGrep(sqs, options);
+    await fillInputCredentials(options)
+    const sqsGrep = new SqsGrep(options);
     // Graceful stop on interrupt signal (CTRL+C for example)
     process.on('SIGINT', () => {
         sqsGrep.log("Caught interrupt signal");
@@ -21,28 +20,14 @@ async function main() {
 }
 
 /**
- * Retrieves AWS SQS SDK options
+ * Fill input credentials into the options, if needed
  * @param {*} options sqs-grep options
- * @returns {Object} the SQS options based on command-line arguments
  */
-async function getSqsOptions(options) {
-    const opts = {
-        region: options.region
-    };
-    if (options.accessKeyId) {
-        opts.accessKeyId = options.accessKeyId;
-    }
-    if (options.secretAccessKey) {
-        opts.secretAccessKey = options.secretAccessKey;
-    }
+async function fillInputCredentials(options) {
     if (options.inputCredentials) {
-        opts.accessKeyId = await prompt('AWS access key id:');
-        opts.secretAccessKey = await prompt('AWS secret access key:');
+        options.accessKeyId = await prompt('AWS access key id:');
+        options.secretAccessKey = await prompt('AWS secret access key:');
     }
-    if (options.endpointUrl) {
-        opts.endpoint = new AWS.Endpoint(options.endpointUrl);
-    }
-    return opts;
 }
 
 // Execute the async main loop and print any errors if they arise

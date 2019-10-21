@@ -73,6 +73,31 @@ describe('SqsGrep', function () {
             assert.equal(sqsGrep.options.parallel, 2);
         });
     });
+    describe('#_getAwsOptions()', function () {
+        it('should set the AWS region', async function () {
+            const options = parse(['--region', 'us-west-2']);
+            const opts = SqsGrep._getAwsOptions(options);
+            assert.equal(opts.region, 'us-west-2');
+        });
+        it('should set the accessKeyId', async function () {
+            const options = parse(['--accessKeyId', 'KEY_ID']);
+            const opts = SqsGrep._getAwsOptions(options);
+            assert.equal(opts.accessKeyId, 'KEY_ID');
+        });
+        it('should set the secretAccessKey', async function () {
+            const options = parse(['--secretAccessKey', 'SECRET']);
+            const opts = SqsGrep._getAwsOptions(options);
+            assert.equal(opts.secretAccessKey, 'SECRET');
+        });
+        it('should set the endpointUrl', async function () {
+            const options = parse(['--endpointUrl', 'http://localhost:5000']);
+            const opts = SqsGrep._getAwsOptions(options);
+            assert.equal(opts.endpoint.protocol, 'http:');
+            assert.equal(opts.endpoint.hostname, 'localhost');
+            assert.equal(opts.endpoint.port, 5000);
+            assert.equal(opts.endpoint.path, '/');
+        });
+    });
     describe('#run()', function () {
         it('should validate options and return null when invalid', async function () {
             const options = parse(['--help']);
