@@ -1,6 +1,7 @@
 const assert = require('assert');
 const sinon = require('sinon');
 const fs = require('fs');
+const AWS = require('aws-sdk');
 const {parseOptions} = require('../src/options');
 const {SqsGrep} = require('../src/sqs-grep');
 
@@ -8,6 +9,11 @@ const emptyLog = sinon.stub();
 
 describe('SqsGrep', function () {
     let sqs;
+    const parse = args => ({
+        ...parseOptions(args),
+        sqs,
+        log: emptyLog
+    });
     beforeEach(function() {
         sqs = {
             getQueueUrl: sinon.stub(),
@@ -34,23 +40,50 @@ describe('SqsGrep', function () {
         sinon.resetBehavior();
     });
     describe('#constructor()', function () {
+        it('should support legacy parameters format', async function () {
+            const options = parse(['--help']);
+            delete options.log;
+            delete options.sqs;
+            const sqsGrep = new SqsGrep(sqs, options, emptyLog);
+            assert.equal(sqsGrep.log, emptyLog);
+            assert.equal(sqsGrep.sqs, sqs);
+        });
         it('should default logger to console.log', async function () {
-            const options = parseOptions(['--help']);
-            const sqsGrep = new SqsGrep(sqs, options);
+            const options = parse(['--help']);
+            delete options.log;
+            const sqsGrep = new SqsGrep(options);
             assert.equal(sqsGrep.log, console.log);
+        });
+        it('should default sqs to AWS.SQS', async function () {
+            const options = parse(['--help']);
+            delete options.sqs;
+            const sqsGrep = new SqsGrep(options);
+            assert.equal(sqsGrep.sqs instanceof AWS.SQS, true);
+        });
+        it('should default all parameters', async function () {
+            const sqsGrep = new SqsGrep({});
+            assert.equal(sqsGrep.sqs instanceof AWS.SQS, true);
+            assert.equal(sqsGrep.log, console.log);
+            assert.equal(sqsGrep.options.parallel, 1);
+        });
+        it('should override default parameters', async function () {
+            const sqsGrep = new SqsGrep({parallel: 2});
+            assert.equal(sqsGrep.sqs instanceof AWS.SQS, true);
+            assert.equal(sqsGrep.log, console.log);
+            assert.equal(sqsGrep.options.parallel, 2);
         });
     });
     describe('#run()', function () {
         it('should validate options and return null when invalid', async function () {
-            const options = parseOptions(['--help']);
-            const sqsGrep = new SqsGrep(sqs, options, emptyLog);
+            const options = parse(['--help']);
+            const sqsGrep = new SqsGrep(options);
             assert.equal(await sqsGrep.run(), null);
             assert.equal(emptyLog.called, true);
         });
         it('should scan all messages', async function () {
             // arrange
-            const options = parseOptions(['--queue=A', '--all']);
-            const sqsGrep = new SqsGrep(sqs, options, emptyLog);
+            const options = parse(['--queue=A', '--all']);
+            const sqsGrep = new SqsGrep(options);
             sqs.receiveMessage.onFirstCall().returns({
                 promise: () => Promise.resolve({Messages: [
                     {Body: '1'},
@@ -78,8 +111,8 @@ describe('SqsGrep', function () {
 
         it('should scan all messages with intermittent empty receives', async function () {
             // arrange
-            const options = parseOptions(['--queue=A', '--all']);
-            const sqsGrep = new SqsGrep(sqs, options, emptyLog);
+            const options = parse(['--queue=A', '--all']);
+            const sqsGrep = new SqsGrep(options);
             sqs.receiveMessage.onFirstCall().returns({
                 promise: () => Promise.resolve({Messages: [
                     {Body: '1'},
@@ -121,8 +154,8 @@ describe('SqsGrep', function () {
 
         it('should filter messages', async function () {
             // arrange
-            const options = parseOptions(['--queue=A', '--body=2']);
-            const sqsGrep = new SqsGrep(sqs, options, emptyLog);
+            const options = parse(['--queue=A', '--body=2']);
+            const sqsGrep = new SqsGrep(options);
             sqs.receiveMessage.onFirstCall().returns({
                 promise: () => Promise.resolve({Messages: [
                     {Body: '1'},
@@ -150,8 +183,8 @@ describe('SqsGrep', function () {
 
         it('should filter messages by attributes', async function () {
             // arrange
-            const options = parseOptions(['--queue=A', '--attribute=key=val', '--silent']);
-            const sqsGrep = new SqsGrep(sqs, options, emptyLog);
+            const options = parse(['--queue=A', '--attribute=key=val', '--silent']);
+            const sqsGrep = new SqsGrep(options);
             sqs.receiveMessage.onFirstCall().returns({
                 promise: () => Promise.resolve({Messages: [
                     {Body: '1', MessageAttributes:{key: {StringValue: 'val'}}},
@@ -179,8 +212,8 @@ describe('SqsGrep', function () {
 
         it('should filter negated messages', async function () {
             // arrange
-            const options = parseOptions(['--queue=A', '--body=2', '--negate', '--full']);
-            const sqsGrep = new SqsGrep(sqs, options, emptyLog);
+            const options = parse(['--queue=A', '--body=2', '--negate', '--full']);
+            const sqsGrep = new SqsGrep(options);
             sqs.receiveMessage.onFirstCall().returns({
                 promise: () => Promise.resolve({Messages: [
                     {Body: '1'},
@@ -208,8 +241,8 @@ describe('SqsGrep', function () {
 
         it('should raise downstream errors', async function () {
             // arrange
-            const options = parseOptions(['--queue=A', '--all']);
-            const sqsGrep = new SqsGrep(sqs, options, emptyLog);
+            const options = parse(['--queue=A', '--all']);
+            const sqsGrep = new SqsGrep(options);
             sqs.receiveMessage.onFirstCall().returns({
                 promise: () => Promise.resolve({Messages: [
                     {Body: '1'},
@@ -227,8 +260,8 @@ describe('SqsGrep', function () {
 
         it('should stop when interrupted after receive', async function () {
             // arrange
-            const options = parseOptions(['--queue=A', '--all']);
-            const sqsGrep = new SqsGrep(sqs, options, emptyLog);
+            const options = parse(['--queue=A', '--all']);
+            const sqsGrep = new SqsGrep(options);
             sqs.receiveMessage.onFirstCall().returns({
                 promise: () => Promise.resolve({Messages: [
                     {Body: '1'},
@@ -255,8 +288,8 @@ describe('SqsGrep', function () {
 
         it('should stop when interrupted during message processing', async function () {
             // arrange
-            const options = parseOptions(['--queue=A', '--all']);
-            const sqsGrep = new SqsGrep(sqs, options, emptyLog);
+            const options = parse(['--queue=A', '--all']);
+            const sqsGrep = new SqsGrep(options);
             sqs.receiveMessage.onFirstCall().returns({
                 promise: () => Promise.resolve({Messages: [
                     {Body: '1'},
@@ -285,8 +318,8 @@ describe('SqsGrep', function () {
 
         it('should stop when maxMessages is reached', async function () {
             // arrange
-            const options = parseOptions(['--queue=A', '--all', '--maxMessages=3']);
-            const sqsGrep = new SqsGrep(sqs, options, emptyLog);
+            const options = parse(['--queue=A', '--all', '--maxMessages=3']);
+            const sqsGrep = new SqsGrep(options);
             sqs.receiveMessage.onFirstCall().returns({
                 promise: () => Promise.resolve({Messages: [
                     {Body: '1'},
@@ -308,8 +341,8 @@ describe('SqsGrep', function () {
         it('should stop when time exceeds', async function () {
             // arrange
             const clock = sinon.useFakeTimers();
-            const options = parseOptions(['--queue=A', '--all', '--timeout=8']);
-            const sqsGrep = new SqsGrep(sqs, options, emptyLog);
+            const options = parse(['--queue=A', '--all', '--timeout=8']);
+            const sqsGrep = new SqsGrep(options);
             [0,1,2,3,4,5,6,7,8,9].forEach(messageNumber => {
                 sqs.receiveMessage.onCall(messageNumber).callsFake(() => {
                     clock.tick(1000);
@@ -331,8 +364,8 @@ describe('SqsGrep', function () {
 
         it('should copy messages', async function () {
             // arrange
-            const options = parseOptions(['--queue=A', '--all', '--copyTo=B']);
-            const sqsGrep = new SqsGrep(sqs, options, emptyLog);
+            const options = parse(['--queue=A', '--all', '--copyTo=B']);
+            const sqsGrep = new SqsGrep(options);
             sqs.receiveMessage.onFirstCall().returns({
                 promise: () => Promise.resolve({Messages: [
                     {Body: '1', MessageAttributes:{key: {StringValue: 'val'}}},
@@ -360,8 +393,8 @@ describe('SqsGrep', function () {
 
         it('should copy messages stripping attributes', async function () {
             // arrange
-            const options = parseOptions(['--queue=A', '--all', '--copyTo=B', '--stripAttributes']);
-            const sqsGrep = new SqsGrep(sqs, options, emptyLog);
+            const options = parse(['--queue=A', '--all', '--copyTo=B', '--stripAttributes']);
+            const sqsGrep = new SqsGrep(options);
             sqs.receiveMessage.onFirstCall().returns({
                 promise: () => Promise.resolve({Messages: [
                     {Body: '1', MessageAttributes:{key: {StringValue: 'val'}}},
@@ -389,8 +422,8 @@ describe('SqsGrep', function () {
 
         it('should move messages', async function () {
             // arrange
-            const options = parseOptions(['--queue=A', '--all', '--moveTo=B']);
-            const sqsGrep = new SqsGrep(sqs, options, emptyLog);
+            const options = parse(['--queue=A', '--all', '--moveTo=B']);
+            const sqsGrep = new SqsGrep(options);
             sqs.receiveMessage.onFirstCall().returns({
                 promise: () => Promise.resolve({Messages: [
                     {Body: '1'},
@@ -416,8 +449,8 @@ describe('SqsGrep', function () {
 
         it('should move and copy messages', async function () {
             // arrange
-            const options = parseOptions(['--queue=A', '--all', '--moveTo=B', '--copyTo=C']);
-            const sqsGrep = new SqsGrep(sqs, options, emptyLog);
+            const options = parse(['--queue=A', '--all', '--moveTo=B', '--copyTo=C']);
+            const sqsGrep = new SqsGrep(options);
             sqs.receiveMessage.onFirstCall().returns({
                 promise: () => Promise.resolve({Messages: [
                     {Body: '1'},
@@ -447,8 +480,8 @@ describe('SqsGrep', function () {
                 fs.unlinkSync('.out');                
             } catch {
             }
-            const options = parseOptions(['--queue=A', '--all', '--outputFile=.out']);
-            const sqsGrep = new SqsGrep(sqs, options, emptyLog);
+            const options = parse(['--queue=A', '--all', '--outputFile=.out']);
+            const sqsGrep = new SqsGrep(options);
             sqs.receiveMessage.onFirstCall().returns({
                 promise: () => Promise.resolve({Messages: [
                     {Body: '1'},
@@ -478,8 +511,8 @@ describe('SqsGrep', function () {
 
         it('should raise downstream errors writing to file system', async function () {
             // arrange
-            const options = parseOptions(['--queue=A', '--all', '--outputFile=.out']);
-            const sqsGrep = new SqsGrep(sqs, options, emptyLog);
+            const options = parse(['--queue=A', '--all', '--outputFile=.out']);
+            const sqsGrep = new SqsGrep(options);
             sqs.receiveMessage.onFirstCall().returns({
                 promise: () => Promise.resolve({Messages: [
                     {Body: '1'},

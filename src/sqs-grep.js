@@ -1,7 +1,8 @@
 const fs = require('fs');
 const os = require('os');
 const chalk = require('chalk');
-const {validateOptions, printMatchingRules} = require('./options');
+const AWS = require('aws-sdk');
+const {validateOptions, printMatchingRules, parseOptions} = require('./options');
 
 /**
  * Main sqs-grep executor class
@@ -9,14 +10,23 @@ const {validateOptions, printMatchingRules} = require('./options');
 class SqsGrep {
     /**
      * Class constructor
-     * @param {AWS:SQS} sqs sqs queue SDK instance
      * @param {*} options sqs-grep options
-     * @param {Function} log logger function (default = console.log)
      */
-    constructor(sqs, options, log = console.log) {
-        this.sqs = sqs;
+    constructor(options) {
+        if (arguments.length > 1) {
+            // Legacy constructor parameters: (sqs, options, log = console.log)
+            options = arguments[1];
+            options.sqs = arguments[0];
+            options.log  = arguments[2];
+        }
+        // Merge with default options
+        options = {
+            ...parseOptions([]),
+            ...options
+        };
         this.options = options;
-        this.log = log;
+        this.sqs = options.sqs || new AWS.SQS();
+        this.log = options.log || console.log;
         this.running = false;
         this.emptyReceives = 0;
         this.qtyScanned = 0;
