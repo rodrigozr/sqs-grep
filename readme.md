@@ -6,7 +6,7 @@
 [![License: MIT](https://img.shields.io/badge/License-MIT-green.svg)](https://opensource.org/licenses/MIT)
 
 Powerful command-line tool used to scan thru an AWS SQS queue and find messages matching a certain criteria.
-It can also optionally delete the matching messages or move them to another SQS queue.
+It can also delete the matching messages, copy/move them to another SQS queue and publish them to an SNS topic.
 
 ## Installation
 * [Download pre-built binaries here](https://github.com/rodrigozr/sqs-grep/releases). The `sqs-grep` tool is distributed as a single executable, so feel free to extract it anywhere and use it from there.
@@ -19,6 +19,7 @@ It can also optionally delete the matching messages or move them to another SQS 
 * Dump matched messages to file
 * Move matched messages to another SQS queue
 * Copy matched messages to another SQS queue
+* Publish matched messages to an SNS topic
 * Delete matched messages
 * Parallel scan for higher throughput
 * Cross-platform, with pre-built binaries for Linux, MacOS and Windows
@@ -50,7 +51,7 @@ $ sqs-grep --queue MyQueue --delete --body Error
 ```
 
 # Providing credentials
-By default, sqs-grep will read credentials from the "$HOME/.aws/credentials" file, which can be configured using the AWS CLI (aws configure).
+By default, sqs-grep will read credentials from the `$HOME/.aws/credentials` file, which can be configured using the AWS CLI (aws configure).
 
 You also have the options below to provide credentials:
 
@@ -76,7 +77,7 @@ $ sqs-grep --accessKeyId "KEY" --secretAccessKey "SECRET" <other options>
 ```
 $ sqs-grep --help
 
-sqs-grep version 1.6.0
+sqs-grep version 1.8.0
 
 sqs-grep
 
@@ -93,6 +94,7 @@ Main options
   --delete                      Delete matched messages from the queue (use with caution)                     
   --moveTo queue name           Move matched messages to the given destination queue                          
   --copyTo queue name           Copy matched messages to the given destination queue                          
+  --publishTo topic ARN         Publish matched messages to the given destination SNS topic                   
   --all                         Matches all messages in the queue (do not filter anything). Setting this flag 
                                 overrides --body and --attribute                                              
 
@@ -122,6 +124,7 @@ Other options
   -o, --outputFile file       Write matched messages to the given output file instead of the console.       
                               Combine with --full to have exact message reproduction, one per line in the   
                               output file                                                                   
+  --endpointUrl URL           Use a custom AWS endpoint URL                                                 
   -h, --help                  Prints this help message                                                      
   -v, --version               Prints the application version                                                
 

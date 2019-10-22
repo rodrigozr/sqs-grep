@@ -25,6 +25,7 @@ const optionDefinitions = [
     { name: 'delete', type: Boolean, group: 'main', description: 'Delete matched messages from the queue (use with caution)' },
     { name: 'moveTo', typeLabel: '{underline queue name}', group: 'main', description: 'Move matched messages to the given destination queue' },
     { name: 'copyTo', typeLabel: '{underline queue name}', group: 'main', description: 'Copy matched messages to the given destination queue' },
+    { name: 'publishTo', typeLabel: '{underline topic ARN}', group: 'main', description: 'Publish matched messages to the given destination SNS topic' },
     { name: 'all', type: Boolean, group: 'main', description: 'Matches all messages in the queue (do not filter anything). Setting this flag overrides {bold --body} and {bold --attribute}' },
     // Credentials
     { name: 'inputCredentials', alias: 'i', type: Boolean, description: 'Input the AWS access key id and secret access key via {underline stdin}', group: 'credentials' },

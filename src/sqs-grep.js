@@ -24,8 +24,10 @@ class SqsGrep {
             ...parseOptions([]),
             ...options
         };
+        const awsOptions = SqsGrep._getAwsOptions(options);
         this.options = options;
-        this.sqs = options.sqs || new AWS.SQS(SqsGrep._getAwsOptions(options));
+        this.sqs = options.sqs || new AWS.SQS(awsOptions);
+        this.sns = options.sns || new AWS.SNS(awsOptions);
         this.log = options.log || console.log;
         this.running = false;
         this.emptyReceives = 0;
@@ -158,7 +160,13 @@ class SqsGrep {
             this.options.copyToQueueUrl = (await this.sqs.getQueueUrl({
                 QueueName: this.options.copyTo,
             }).promise()).QueueUrl;
-        }        
+        }
+        if (this.options.publishTo) {
+            this.log(chalk`Connecting to target SNS topic '{green ${this.options.publishTo}}' in the '{green ${this.options.region}}' region...`);
+            await this.sns.getTopicAttributes({
+                TopicArn: this.options.publishTo,
+            }).promise();
+        }
     }
 
     /**
@@ -219,7 +227,7 @@ class SqsGrep {
     async _processMatchedSqsMessage(message) {
         await this._printSqsMessage(message);
         const options = this.options;
-        if (options.moveTo || options.copyTo) {
+        if (options.moveTo || options.copyTo || options.publishTo) {
             if (!options.stripAttributes && message.MessageAttributes) {
                 // Remove parameter values not supported yet
                 for (let key in message.MessageAttributes) {
@@ -233,6 +241,14 @@ class SqsGrep {
                 await this.sqs.sendMessage({
                     QueueUrl: url,
                     MessageBody: message.Body,
+                    MessageAttributes: options.stripAttributes ? null : message.MessageAttributes,
+                }).promise();
+            }
+            // Publish the message to the target topic
+            if (options.publishTo) {
+                await this.sns.publish({
+                    TopicArn: options.publishTo,
+                    Message: this._getBodyToPublish(message),
                     MessageAttributes: options.stripAttributes ? null : message.MessageAttributes,
                 }).promise();
             }
@@ -268,6 +284,24 @@ class SqsGrep {
             res.push(fn());
         }
         return res;
+    }
+
+    /**
+     * Gets the message body to publish on SNS, given an SQS message
+     * @param {*} message SQS message
+     */
+    _getBodyToPublish(message) {
+        let body = message.Body;
+        // Check if this is already an SNS message to avoid "double-wrapping" it
+        try {
+            const notification = JSON.parse(body);
+            if (notification.Type === 'Notification' && notification.Message) {
+                body = notification.Message;
+            }
+        } catch (ex) {
+            // ignore
+        }
+        return body;
     }
 }
 

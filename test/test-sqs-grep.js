@@ -8,10 +8,10 @@ const {SqsGrep} = require('../src/sqs-grep');
 const emptyLog = sinon.stub();
 
 describe('SqsGrep', function () {
-    let sqs;
+    let sqs, sns;
     const parse = args => ({
         ...parseOptions(args),
-        sqs,
+        sqs, sns,
         log: emptyLog
     });
     beforeEach(function() {
@@ -32,6 +32,16 @@ describe('SqsGrep', function () {
             promise: () => Promise.resolve({})
         });
         sqs.deleteMessage.returns({
+            promise: () => Promise.resolve({})
+        });
+        sns = {
+            getTopicAttributes: sinon.stub(),
+            publish: sinon.stub(),
+        };
+        sns.getTopicAttributes.returns({
+            promise: () => Promise.resolve({})
+        });
+        sns.publish.returns({
             promise: () => Promise.resolve({})
         });
     });
@@ -59,6 +69,12 @@ describe('SqsGrep', function () {
             delete options.sqs;
             const sqsGrep = new SqsGrep(options);
             assert.equal(sqsGrep.sqs instanceof AWS.SQS, true);
+        });
+        it('should default sns to AWS.SNS', async function () {
+            const options = parse(['--help']);
+            delete options.sns;
+            const sqsGrep = new SqsGrep(options);
+            assert.equal(sqsGrep.sns instanceof AWS.SNS, true);
         });
         it('should default all parameters', async function () {
             const sqsGrep = new SqsGrep({});
@@ -440,6 +456,96 @@ describe('SqsGrep', function () {
             assert.equal(sqs.sendMessage.callCount, 2);
             assert.equal(sqs.sendMessage.firstCall.args[0].MessageAttributes, null);
             assert.equal(sqs.sendMessage.secondCall.args[0].MessageAttributes, null);
+            assert.equal(sqs.deleteMessage.callCount, 0);
+            assert.equal(res.qtyScanned, 2);
+            assert.equal(res.qtyMatched, 2);
+        });
+
+        it('should publish messages', async function () {
+            // arrange
+            const options = parse(['--queue=A', '--all', '--publishTo=FAKE_ARN']);
+            const sqsGrep = new SqsGrep(options);
+            sqs.receiveMessage.onFirstCall().returns({
+                promise: () => Promise.resolve({Messages: [
+                    {Body: '1', MessageAttributes:{key: {StringValue: 'val'}}},
+                    {Body: '2'},
+                ]})
+            });
+            [1,2,3,4,5,6].forEach(call => {
+                sqs.receiveMessage.onCall(call).returns({
+                    promise: () => Promise.resolve({Messages: []})
+                });
+            });
+            
+            // act
+            const res = await sqsGrep.run();
+
+            // assert
+            assert.equal(sqs.getQueueUrl.callCount, 1);
+            assert.equal(sns.getTopicAttributes.callCount, 1);
+            assert.equal(sns.publish.callCount, 2);
+            assert.equal(sns.publish.firstCall.args[0].MessageAttributes.key.StringValue, 'val');
+            assert.equal(sns.publish.secondCall.args[0].MessageAttributes, null);
+            assert.equal(sqs.deleteMessage.callCount, 0);
+            assert.equal(res.qtyScanned, 2);
+            assert.equal(res.qtyMatched, 2);
+        });
+
+        it('should publish SNS notification without re-wrapping them', async function () {
+            // arrange
+            const options = parse(['--queue=A', '--all', '--publishTo=FAKE_ARN']);
+            const sqsGrep = new SqsGrep(options);
+            sqs.receiveMessage.onFirstCall().returns({
+                promise: () => Promise.resolve({Messages: [
+                    {Body: '{"Type":"Notification","Message":"1"}'},
+                    {Body: '2'},
+                ]})
+            });
+            [1,2,3,4,5,6].forEach(call => {
+                sqs.receiveMessage.onCall(call).returns({
+                    promise: () => Promise.resolve({Messages: []})
+                });
+            });
+            
+            // act
+            const res = await sqsGrep.run();
+
+            // assert
+            assert.equal(sqs.getQueueUrl.callCount, 1);
+            assert.equal(sns.getTopicAttributes.callCount, 1);
+            assert.equal(sns.publish.callCount, 2);
+            assert.equal(sns.publish.firstCall.args[0].Message, '1');
+            assert.equal(sns.publish.secondCall.args[0].Message, '2');
+            assert.equal(sqs.deleteMessage.callCount, 0);
+            assert.equal(res.qtyScanned, 2);
+            assert.equal(res.qtyMatched, 2);
+        });
+
+        it('should publish messages stripping attributes', async function () {
+            // arrange
+            const options = parse(['--queue=A', '--all', '--publishTo=FAKE_ARN', '--stripAttributes']);
+            const sqsGrep = new SqsGrep(options);
+            sqs.receiveMessage.onFirstCall().returns({
+                promise: () => Promise.resolve({Messages: [
+                    {Body: '1', MessageAttributes:{key: {StringValue: 'val'}}},
+                    {Body: '2'},
+                ]})
+            });
+            [1,2,3,4,5,6].forEach(call => {
+                sqs.receiveMessage.onCall(call).returns({
+                    promise: () => Promise.resolve({Messages: []})
+                });
+            });
+            
+            // act
+            const res = await sqsGrep.run();
+
+            // assert
+            assert.equal(sqs.getQueueUrl.callCount, 1);
+            assert.equal(sns.getTopicAttributes.callCount, 1);
+            assert.equal(sns.publish.callCount, 2);
+            assert.equal(sns.publish.firstCall.args[0].MessageAttributes, null);
+            assert.equal(sns.publish.secondCall.args[0].MessageAttributes, null);
             assert.equal(sqs.deleteMessage.callCount, 0);
             assert.equal(res.qtyScanned, 2);
             assert.equal(res.qtyMatched, 2);

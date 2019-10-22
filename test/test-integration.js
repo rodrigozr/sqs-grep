@@ -10,6 +10,7 @@ const emptyLog = sinon.stub();
 
 describe('Integration Tests', function () {
     let sqs = new AWS.SQS();
+    let sns = new AWS.SNS();
     before(async function() {
         if (!process.env['RUN_INTEGRATION_TESTS']) {
             console.log('    Skipping integration tests because RUN_INTEGRATION_TESTS was not defined');
@@ -26,10 +27,18 @@ describe('Integration Tests', function () {
                 await exec(`docker rm -f ${containerName}`);
             } catch {}
             // Start the docker container
-            await exec(`docker run -d --rm --name ${containerName} -p 4576:4576 -e SERVICES=sqs localstack/localstack`);
+            await exec(`docker run -d --rm --name ${containerName} -p 4575-4576:4575-4576 -e SERVICES=sqs,sns localstack/localstack`);
             // Create a custom SQS connector
-            const options = parseOptions(['--endpointUrl', 'http://localhost:4576']);
+            let options = parseOptions(['--endpointUrl', 'http://localhost:4576']);
             sqs = new AWS.SQS({
+                region: options.region,
+                accessKeyId: 'FAKE',
+                secretAccessKey: 'FAKE',
+                endpoint:new AWS.Endpoint(options.endpointUrl)
+            });
+            // Create a custom SNS connector
+            options = parseOptions(['--endpointUrl', 'http://localhost:4575']);
+            sns = new AWS.SNS({
                 region: options.region,
                 accessKeyId: 'FAKE',
                 secretAccessKey: 'FAKE',
@@ -40,12 +49,14 @@ describe('Integration Tests', function () {
             while (new Date().getTime() < deadline) {
                 let {stdout} = await exec(`docker logs ${containerName}`);
                 if (stdout.split('\n').includes('Ready.')) {
-                    // Ensure we can create a queue
+                    // Ensure we can create a queue and list SNS topics
                     try {
                         await sqs.createQueue({QueueName: 'ReadyTest'}).promise();
+                        await sns.listTopics({}).promise();
                         // Success - the container is ready to be used!
                         return;
-                    } catch {
+                    } catch (ex) {
+                        console.log(ex);
                     }
                 }
                 // Wait 100ms...
@@ -87,9 +98,14 @@ describe('Integration Tests', function () {
         }).promise();
         return queueAttributes.Attributes[attribute];
     }
+    const parse = args => ({
+        sqs, sns,
+        log: emptyLog,
+        ...parseOptions(args)
+    });
     it('should scan the queue', async function () {
         // act
-        const {qtyScanned, qtyMatched} = await new SqsGrep(sqs, parseOptions(['--queue=Queue1', '--body=test']), emptyLog).run();
+        const {qtyScanned, qtyMatched} = await new SqsGrep(parse(['--queue=Queue1', '--body=test'])).run();
         
         // assert
         assert.equal(qtyScanned, 4);
@@ -97,7 +113,26 @@ describe('Integration Tests', function () {
     });
     it('should copy the queue', async function () {
         // act
-        const {qtyScanned, qtyMatched} = await new SqsGrep(sqs, parseOptions(['--queue=Queue1', '--copyTo=Queue2', '--body=test']), emptyLog).run();
+        const {qtyScanned, qtyMatched} = await new SqsGrep(parse(['--queue=Queue1', '--copyTo=Queue2', '--body=test'])).run();
+        
+        // assert
+        assert.equal(qtyScanned, 4);
+        assert.equal(qtyMatched, 2);
+        assert.equal(await getQueueAttribute(queueUrl2, 'ApproximateNumberOfMessages'), 2);
+        assert.equal(await getQueueAttribute(queueUrl1, 'ApproximateNumberOfMessagesNotVisible'), 4);
+    });
+    it('should publish the queue', async function () {
+        // arrange
+        const topic = (await sns.createTopic({Name: 'MyTopic'}).promise()).TopicArn;
+        const queueArn = await getQueueAttribute(queueUrl2, 'QueueArn');
+        await sns.subscribe({
+            Protocol: 'sqs',
+            TopicArn: topic,
+            Endpoint: queueArn,
+        }).promise();
+        
+        // act
+        const {qtyScanned, qtyMatched} = await new SqsGrep(parse(['--queue=Queue1', '--publishTo', topic, '--body=test'])).run();
         
         // assert
         assert.equal(qtyScanned, 4);
@@ -107,7 +142,7 @@ describe('Integration Tests', function () {
     });
     it('should move the queue', async function () {
         // act
-        const {qtyScanned, qtyMatched} = await new SqsGrep(sqs, parseOptions(['--queue=Queue1', '--moveTo=Queue2', '--body=test']), emptyLog).run();
+        const {qtyScanned, qtyMatched} = await new SqsGrep(parse(['--queue=Queue1', '--moveTo=Queue2', '--body=test'])).run();
         
         // assert
         assert.equal(qtyScanned, 4);
@@ -118,7 +153,7 @@ describe('Integration Tests', function () {
     });
     it('should move and copy the queue', async function () {
         // act
-        const {qtyScanned, qtyMatched} = await new SqsGrep(sqs, parseOptions(['--queue=Queue1', '--moveTo=Queue2', '--copyTo=Queue3', '--body=test']), emptyLog).run();
+        const {qtyScanned, qtyMatched} = await new SqsGrep(parse(['--queue=Queue1', '--moveTo=Queue2', '--copyTo=Queue3', '--body=test'])).run();
         
         // assert
         assert.equal(qtyScanned, 4);
