@@ -551,6 +551,66 @@ describe('SqsGrep', function () {
             assert.equal(res.qtyMatched, 2);
         });
 
+        it('should republish SNS messages to their topic of origin', async function () {
+            // arrange
+            const options = parse(['--queue=A', '--all', '--republish']);
+            const sqsGrep = new SqsGrep(options);
+            sqs.receiveMessage.onFirstCall().returns({
+                promise: () => Promise.resolve({Messages: [
+                        {Body: '{"Type":"Notification","Message":"1", "TopicArn":"A"}'},
+                        {Body: '{"Type":"Notification","Message":"2", "TopicArn":"B"}'},
+                    ]})
+            });
+            [1,2,3,4,5,6].forEach(call => {
+                sqs.receiveMessage.onCall(call).returns({
+                    promise: () => Promise.resolve({Messages: []})
+                });
+            });
+
+            // act
+            const res = await sqsGrep.run();
+
+            // assert
+            assert.equal(sqs.getQueueUrl.callCount, 1);
+            assert.equal(sns.publish.callCount, 2);
+            assert.equal(sns.publish.firstCall.args[0].Message, '1');
+            assert.equal(sns.publish.firstCall.args[0].TopicArn, 'A');
+            assert.equal(sns.publish.secondCall.args[0].Message, '2');
+            assert.equal(sns.publish.secondCall.args[0].TopicArn, 'B');
+            assert.equal(sqs.deleteMessage.callCount, 0);
+            assert.equal(res.qtyScanned, 2);
+            assert.equal(res.qtyMatched, 2);
+        });
+
+        it('should republish SNS messages stripping attributes', async function () {
+            // arrange
+            const options = parse(['--queue=A', '--all', '--republish', '--stripAttributes']);
+            const sqsGrep = new SqsGrep(options);
+            sqs.receiveMessage.onFirstCall().returns({
+                promise: () => Promise.resolve({Messages: [
+                        {Body: '{"Type":"Notification","Message":"1", "TopicArn":"A"}', MessageAttributes:{key: {StringValue: 'val'}}},
+                        {Body: '{"Type":"Notification","Message":"2", "TopicArn":"B"}'},
+                    ]})
+            });
+            [1,2,3,4,5,6].forEach(call => {
+                sqs.receiveMessage.onCall(call).returns({
+                    promise: () => Promise.resolve({Messages: []})
+                });
+            });
+
+            // act
+            const res = await sqsGrep.run();
+
+            // assert
+            assert.equal(sqs.getQueueUrl.callCount, 1);
+            assert.equal(sns.publish.callCount, 2);
+            assert.equal(sns.publish.firstCall.args[0].MessageAttributes, null);
+            assert.equal(sns.publish.secondCall.args[0].MessageAttributes, null);
+            assert.equal(sqs.deleteMessage.callCount, 0);
+            assert.equal(res.qtyScanned, 2);
+            assert.equal(res.qtyMatched, 2);
+        });
+
         it('should move messages', async function () {
             // arrange
             const options = parse(['--queue=A', '--all', '--moveTo=B']);
