@@ -77,7 +77,7 @@ $ sqs-grep --accessKeyId "KEY" --secretAccessKey "SECRET" <other options>
 ```
 $ sqs-grep --help
 
-sqs-grep version 1.8.0
+sqs-grep version 1.8.1
 
 sqs-grep
 
@@ -95,6 +95,7 @@ Main options
   --moveTo queue name           Move matched messages to the given destination queue                          
   --copyTo queue name           Copy matched messages to the given destination queue                          
   --publishTo topic ARN         Publish matched messages to the given destination SNS topic                   
+  --republish                   Republishes matched messages from SNS back to their topic of origin
   --all                         Matches all messages in the queue (do not filter anything). Setting this flag 
                                 overrides --body and --attribute                                              
 

@@ -9,7 +9,7 @@ const {SqsGrep} = require('./sqs-grep');
  */
 async function main() {
     const options = parseOptions();
-    await fillInputCredentials(options)
+    await fillInputCredentials(options);
     const sqsGrep = new SqsGrep(options);
     // Graceful stop on interrupt signal (CTRL+C for example)
     process.on('SIGINT', () => {

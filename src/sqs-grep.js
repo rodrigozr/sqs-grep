@@ -95,7 +95,7 @@ class SqsGrep {
         });
         // Wait for all parallel executions to complete
         await Promise.all(promises);
-    
+
         // Print the status
         this.log(chalk`\nMessages scanned: {green ${this.qtyScanned}}\nMessages matched: {green ${this.qtyMatched}}`);
         if (!this.running) this.log('Interrupted');
@@ -140,7 +140,7 @@ class SqsGrep {
      * Connects to all required SQS queues by retrieving their URL
      */
     async _connectToQueues() {
-        this.log(chalk`Connecting to SQS queue '{green ${this.options.queue}}' in the '{green ${this.options.region}}' region...`)
+        this.log(chalk`Connecting to SQS queue '{green ${this.options.queue}}' in the '{green ${this.options.region}}' region...`);
         this.options.sourceQueueUrl = (await this.sqs.getQueueUrl({
             QueueName: this.options.queue,
         }).promise()).QueueUrl;
@@ -207,7 +207,7 @@ class SqsGrep {
             Body: message.Body,
             MessageAttributes: message.MessageAttributes
         }) : message.Body;
-        
+
         if (options.outputFile) {
             return new Promise((resolve, reject) => {
                 fs.appendFile(options.outputFile, content + os.EOL, {encoding: 'utf-8'}, err => {
@@ -227,7 +227,7 @@ class SqsGrep {
     async _processMatchedSqsMessage(message) {
         await this._printSqsMessage(message);
         const options = this.options;
-        if (options.moveTo || options.copyTo || options.publishTo) {
+        if (options.moveTo || options.copyTo || options.publishTo || options.republish) {
             if (!options.stripAttributes && message.MessageAttributes) {
                 // Remove parameter values not supported yet
                 for (let key in message.MessageAttributes) {
@@ -251,6 +251,21 @@ class SqsGrep {
                     Message: this._getBodyToPublish(message),
                     MessageAttributes: options.stripAttributes ? null : message.MessageAttributes,
                 }).promise();
+            }
+            // Republish message to it's topic of origin
+            if (options.republish) {
+                try {
+                    const notification = JSON.parse(message.Body);
+                    if (notification.Type === 'Notification' && notification.Message && notification.TopicArn) {
+                        await this.sns.publish({
+                            TopicArn: notification.TopicArn,
+                            Message: notification.Message,
+                            MessageAttributes: options.stripAttributes ? null : message.MessageAttributes,
+                        }).promise();
+                    }
+                } catch (err) {
+                    // ignore
+                }
             }
         }
         if (options.delete || options.moveTo) {
