@@ -140,6 +140,31 @@ describe('Integration Tests', function () {
         assert.equal(await getQueueAttribute(queueUrl2, 'ApproximateNumberOfMessages'), 2);
         assert.equal(await getQueueAttribute(queueUrl1, 'ApproximateNumberOfMessagesNotVisible'), 4);
     });
+    it('should re-publish messages to the original queue', async function () {
+        // arrange
+        const topic = (await sns.createTopic({Name: 'MyTopicForRepublish'}).promise()).TopicArn;
+        const queueArn = await getQueueAttribute(queueUrl2, 'QueueArn');
+        await sns.subscribe({
+            Protocol: 'sqs',
+            TopicArn: topic,
+            Endpoint: queueArn,
+        }).promise();
+        await sns.publish({
+            TopicArn: topic,
+            Message: "test publish",
+        }).promise();
+        await new SqsGrep(parse(['--queue=Queue2', '--moveTo=Queue3', '--body=publish'])).run();
+        
+        // act
+        const {qtyScanned, qtyMatched} = await new SqsGrep(parse(['--queue=Queue3', '--delete', '--republish', '--body=publish'])).run();
+        
+        // assert
+        assert.equal(qtyScanned, 1);
+        assert.equal(qtyMatched, 1);
+        assert.equal(await getQueueAttribute(queueUrl2, 'ApproximateNumberOfMessages'), 1);
+        assert.equal(await getQueueAttribute(queueUrl3, 'ApproximateNumberOfMessages'), 0);
+        assert.equal(await getQueueAttribute(queueUrl3, 'ApproximateNumberOfMessagesNotVisible'), 0);
+    });
     it('should move the queue', async function () {
         // act
         const {qtyScanned, qtyMatched} = await new SqsGrep(parse(['--queue=Queue1', '--moveTo=Queue2', '--body=test'])).run();
