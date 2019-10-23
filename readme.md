@@ -77,7 +77,7 @@ $ sqs-grep --accessKeyId "KEY" --secretAccessKey "SECRET" <other options>
 ```
 $ sqs-grep --help
 
-sqs-grep version 1.8.0
+sqs-grep version 1.8.1
 
 sqs-grep
 

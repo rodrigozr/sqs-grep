@@ -611,6 +611,37 @@ describe('SqsGrep', function () {
             assert.equal(res.qtyMatched, 2);
         });
 
+        it('should ignore messages with invalid body content when republishing', async function () {
+            // arrange
+            const options = parse(['--queue=A', '--all', '--republish']);
+            const sqsGrep = new SqsGrep(options);
+            sqs.receiveMessage.onFirstCall().returns({
+                promise: () => Promise.resolve({
+                    Messages: [
+                        {Body: 'ABCD'}, // Non-JSON
+                        {Body: '{"Type":"ABCD","Message":"1", "TopicArn":"A"}'}, // Type not Notification
+                        {Body: '{"Type":"Notification", "TopicArn":"A"}'}, // No Message attribute
+                        {Body: '{"Type":"Notification","Message":"1"}'} // No Topic Arn attribute
+                    ]
+                })
+            });
+            [1,2,3,4,5,6].forEach(call => {
+                sqs.receiveMessage.onCall(call).returns({
+                    promise: () => Promise.resolve({Messages: []})
+                });
+            });
+
+            // act
+            const res = await sqsGrep.run();
+
+            // assert
+            assert.equal(sqs.getQueueUrl.callCount, 1);
+            assert.equal(sns.publish.callCount, 0);
+            assert.equal(sqs.deleteMessage.callCount, 0);
+            assert.equal(res.qtyScanned, 4);
+            assert.equal(res.qtyMatched, 4);
+        });
+
         it('should move messages', async function () {
             // arrange
             const options = parse(['--queue=A', '--all', '--moveTo=B']);

@@ -254,13 +254,17 @@ class SqsGrep {
             }
             // Republish message to it's topic of origin
             if (options.republish) {
-                const notification = JSON.parse(message.Body);
-                if (notification.Type === 'Notification' && notification.Message) {
-                    await this.sns.publish({
-                        TopicArn: notification.TopicArn,
-                        Message: notification.Message,
-                        MessageAttributes: options.stripAttributes ? null : message.MessageAttributes,
-                    }).promise();
+                try {
+                    const notification = JSON.parse(message.Body);
+                    if (notification.Type === 'Notification' && notification.Message && notification.TopicArn) {
+                        await this.sns.publish({
+                            TopicArn: notification.TopicArn,
+                            Message: notification.Message,
+                            MessageAttributes: options.stripAttributes ? null : message.MessageAttributes,
+                        }).promise();
+                    }
+                } catch (err) {
+                    // ignore
                 }
             }
         }
