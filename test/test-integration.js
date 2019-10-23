@@ -27,7 +27,7 @@ describe('Integration Tests', function () {
                 await exec(`docker rm -f ${containerName}`);
             } catch {}
             // Start the docker container
-            await exec(`docker run -d --rm --name ${containerName} -p 4575-4576:4575-4576 -e SERVICES=sqs,sns localstack/localstack`);
+            await exec(`docker run -d --name ${containerName} -p 4575-4576:4575-4576 -e SERVICES=sqs,sns localstack/localstack`);
             // Create a custom SQS connector
             let options = parseOptions(['--endpointUrl', 'http://localhost:4576']);
             sqs = new AWS.SQS({
