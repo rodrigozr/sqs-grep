@@ -64,6 +64,7 @@ class SqsGrep {
                         MaxNumberOfMessages: 10,
                         VisibilityTimeout: Math.max(1, options.timeout + 10 - elapsedSeconds),
                         MessageAttributeNames: ['All'],
+                        AttributeNames: ['All'],
                     }).promise();
                     if (!res.Messages || !res.Messages.length) {
                         if (++this.emptyReceives < 5) {
@@ -238,10 +239,15 @@ class SqsGrep {
             // Copy the message to the target queues
             const targetUrls = [options.moveToQueueUrl, options.copyToQueueUrl].filter(url => url);
             for (let url of targetUrls) {
+                const fifoAttributes = !url.endsWith('.fifo') ? {} : {
+                    MessageGroupId: message.Attributes.MessageGroupId || 'fifo',
+                    MessageDeduplicationId: message.Attributes.MessageDeduplicationId || message.MessageId,
+                };
                 await this.sqs.sendMessage({
                     QueueUrl: url,
                     MessageBody: message.Body,
                     MessageAttributes: options.stripAttributes ? null : message.MessageAttributes,
+                    ...fifoAttributes
                 }).promise();
             }
             // Publish the message to the target topic

@@ -23,6 +23,7 @@ It can also delete the matching messages, copy/move them to another SQS queue an
 * Delete matched messages
 * Parallel scan for higher throughput
 * Cross-platform, with pre-built binaries for Linux, MacOS and Windows
+* Supports FIFO queues for both sources and targets (--copyTo, --moveTo)
 
 # Usage examples
 Find messages containing the text 'Error' in the body:

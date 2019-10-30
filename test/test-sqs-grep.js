@@ -461,6 +461,40 @@ describe('SqsGrep', function () {
             assert.equal(res.qtyMatched, 2);
         });
 
+        it('should copy messages to FIFO queue', async function () {
+            // arrange
+            const options = parse(['--queue=A', '--all', '--copyTo=B.fifo']);
+            const sqsGrep = new SqsGrep(options);
+            sqs.receiveMessage.onFirstCall().returns({
+                promise: () => Promise.resolve({Messages: [
+                    {Body: '1', MessageAttributes:{key: {StringValue: 'val'}}, Attributes:{}, MessageId: 'id'},
+                    {Body: '2', MessageAttributes:{key: {StringValue: 'val'}}, Attributes:{MessageGroupId:'group', MessageDeduplicationId: 'dup'}},
+                ]})
+            });
+            [1,2,3,4,5,6].forEach(call => {
+                sqs.receiveMessage.onCall(call).returns({
+                    promise: () => Promise.resolve({Messages: []})
+                });
+            });
+            sqs.getQueueUrl.withArgs({QueueName:'B.fifo'}).returns({
+                promise: () => Promise.resolve({QueueUrl: 'fake://B.fifo'})
+            });
+                
+            // act
+            const res = await sqsGrep.run();
+
+            // assert
+            assert.equal(sqs.getQueueUrl.callCount, 2);
+            assert.equal(sqs.sendMessage.callCount, 2);
+            assert.equal(sqs.sendMessage.firstCall.args[0].MessageGroupId, 'fifo');
+            assert.equal(sqs.sendMessage.firstCall.args[0].MessageDeduplicationId, 'id');
+            assert.equal(sqs.sendMessage.secondCall.args[0].MessageGroupId, 'group');
+            assert.equal(sqs.sendMessage.secondCall.args[0].MessageDeduplicationId, 'dup');
+            assert.equal(sqs.deleteMessage.callCount, 0);
+            assert.equal(res.qtyScanned, 2);
+            assert.equal(res.qtyMatched, 2);
+        });
+
         it('should publish messages', async function () {
             // arrange
             const options = parse(['--queue=A', '--all', '--publishTo=FAKE_ARN']);

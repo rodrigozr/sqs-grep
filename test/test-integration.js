@@ -87,9 +87,10 @@ describe('Integration Tests', function () {
         await sqs.sendMessage({QueueUrl: queueUrl1, MessageBody: 'message 4 - test'}).promise()
     });
     afterEach(async function() {
-        await sqs.deleteQueue({QueueUrl: queueUrl1}).promise();
-        await sqs.deleteQueue({QueueUrl: queueUrl2}).promise();
-        await sqs.deleteQueue({QueueUrl: queueUrl3}).promise();
+        const queues = (await sqs.listQueues().promise()).QueueUrls;
+        for (const url of queues) {
+            await sqs.deleteQueue({QueueUrl: url}).promise();
+        }
     });
     const getQueueAttribute = async (queueUrl, attribute) => {
         const queueAttributes = await sqs.getQueueAttributes({
@@ -188,4 +189,36 @@ describe('Integration Tests', function () {
         assert.equal(await getQueueAttribute(queueUrl1, 'ApproximateNumberOfMessages'), 0);
         assert.equal(await getQueueAttribute(queueUrl1, 'ApproximateNumberOfMessagesNotVisible'), 2);
     });
+    it('should process from FIFO queue', async function () {
+        // arrange
+        const attr = {'FifoQueue': 'true', 'ContentBasedDeduplication':'true'};
+        const fifoQueueUrl = (await sqs.createQueue({QueueName: 'Queue.fifo', Attributes: attr}).promise()).QueueUrl;
+        await sqs.sendMessage({QueueUrl: fifoQueueUrl, MessageGroupId: '1', MessageBody: 'message 1'}).promise()
+        await sqs.sendMessage({QueueUrl: fifoQueueUrl, MessageGroupId: '1', MessageBody: 'message 2 - test'}).promise()
+
+        // act
+        const {qtyScanned, qtyMatched} = await new SqsGrep(parse(['--queue=Queue.fifo', '--moveTo=Queue2', '--copyTo=Queue3', '--body=test'])).run();
+        
+        // assert
+        assert.equal(qtyScanned, 2);
+        assert.equal(qtyMatched, 1);
+        assert.equal(await getQueueAttribute(queueUrl2, 'ApproximateNumberOfMessages'), 1);
+        assert.equal(await getQueueAttribute(queueUrl3, 'ApproximateNumberOfMessages'), 1);
+        assert.equal(await getQueueAttribute(fifoQueueUrl, 'ApproximateNumberOfMessages'), 0);
+        assert.equal(await getQueueAttribute(fifoQueueUrl, 'ApproximateNumberOfMessagesNotVisible'), 1);
+    });
+    it('should process to FIFO queue', async function () {
+        // arrange
+        const attr = {'FifoQueue': 'true', 'ContentBasedDeduplication':'true'};
+        const fifoQueueUrl = (await sqs.createQueue({QueueName: 'Queue.fifo', Attributes: attr}).promise()).QueueUrl;
+
+        // act
+        const {qtyScanned, qtyMatched} = await new SqsGrep(parse(['--queue=Queue1', '--copyTo=Queue.fifo', '--body=test'])).run();
+        
+        // assert
+        assert.equal(qtyScanned, 4);
+        assert.equal(qtyMatched, 2);
+        assert.equal(await getQueueAttribute(fifoQueueUrl, 'ApproximateNumberOfMessages'), 2);
+    });
+
 });
