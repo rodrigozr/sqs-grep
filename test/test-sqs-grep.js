@@ -1,3 +1,4 @@
+/* eslint-disable no-undef */
 const assert = require('assert');
 const sinon = require('sinon');
 const fs = require('fs');
@@ -734,7 +735,8 @@ describe('SqsGrep', function () {
             // arrange
             try {
                 fs.unlinkSync('.out');                
-            } catch {
+            } catch (err) {
+                /* ignore */
             }
             const options = parse(['--queue=A', '--all', '--outputFile=.out']);
             const sqsGrep = new SqsGrep(options);
@@ -763,6 +765,27 @@ describe('SqsGrep', function () {
             assert.equal(res.qtyMatched, 3);
             assert.equal(fs.readFileSync('.out', 'utf-8'), '1\n2\n3\n');
             fs.unlinkSync('.out');
+        });
+
+        it('should read messages from file', async function () {
+            // arrange
+            try {
+                fs.unlinkSync('.input');
+            } catch (err) {
+                /* ignore */
+            }
+            fs.writeFileSync('.input', `{"Body":"msg2","Attributes":{"SenderId":"AROAJDMDSGLKMLH45GQPG:rrosauro","ApproximateFirstReceiveTimestamp":"1575485575436","ApproximateReceiveCount":"2","SentTimestamp":"1575485516130"}}
+            {"Body":"msg1","Attributes":{"SenderId":"AROAJDMDSGLKMLH45GQPG:rrosauro","ApproximateFirstReceiveTimestamp":"1575485574864","ApproximateReceiveCount":"2","SentTimestamp":"1575485512474"}}`, 'utf-8');
+            const options = parse(['--inputFile=.input', '--body=msg2']);
+            const sqsGrep = new SqsGrep(options);
+            
+            // act
+            const res = await sqsGrep.run();
+
+            // assert
+            assert.equal(res.qtyScanned, 2);
+            assert.equal(res.qtyMatched, 1);
+            fs.unlinkSync('.input');
         });
 
         it('should raise downstream errors writing to file system', async function () {

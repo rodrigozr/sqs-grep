@@ -2,6 +2,7 @@ const fs = require('fs');
 const os = require('os');
 const chalk = require('chalk');
 const AWS = require('aws-sdk');
+const lineByLine = require('n-readlines');
 const {validateOptions, printMatchingRules, parseOptions} = require('./options');
 
 /**
@@ -40,32 +41,24 @@ class SqsGrep {
      * @returns {*} {qtyScanned, qtyMatched}
      */
     async run() {
-        const options = this.options;
-        if (!validateOptions(options, this.log)) {
+        if (!validateOptions(this.options, this.log)) {
             return null;
         }
         await this._connectToQueues();
-        printMatchingRules(options, this.log);
+        printMatchingRules(this.options, this.log);
 
-        const startedAt = new Date().getTime();
-        const endAt = startedAt + options.timeout * 1000;
+        this.startedAt = new Date().getTime();
+        this.endAt = this.startedAt + this.options.timeout * 1000;
         this.emptyReceives = 0;
         this.running = true;
         this.qtyScanned = 0;
         this.qtyMatched = 0;
-        const keepRunning = () => this.running && new Date().getTime() < endAt && (options.maxMessages == 0 || this.qtyMatched < options.maxMessages);
+        const keepRunning = () => this.running && new Date().getTime() < this.endAt && (this.options.maxMessages == 0 || this.qtyMatched < this.options.maxMessages);
         this.log('Scanning...');
-        const promises = this._nTimes(options.parallel, async () => {
+        const promises = this._nTimes(this.options.parallel, async () => {
             while (keepRunning()) {
                 try {
-                    const elapsedSeconds = parseInt((new Date().getTime() - startedAt) / 1000);
-                    const res = await this.sqs.receiveMessage({
-                        QueueUrl: options.sourceQueueUrl,
-                        MaxNumberOfMessages: 10,
-                        VisibilityTimeout: Math.max(1, options.timeout + 10 - elapsedSeconds),
-                        MessageAttributeNames: ['All'],
-                        AttributeNames: ['All'],
-                    }).promise();
+                    const res = await this._receiveMessage();
                     if (!res.Messages || !res.Messages.length) {
                         if (++this.emptyReceives < 5) {
                             continue;
@@ -100,13 +93,13 @@ class SqsGrep {
         // Print the status
         this.log(chalk`\nMessages scanned: {green ${this.qtyScanned}}\nMessages matched: {green ${this.qtyMatched}}`);
         if (!this.running) this.log('Interrupted');
-        else if (options.maxMessages && this.qtyMatched >= options.maxMessages) this.log('Done - Maximum number of messages matched');
-        else if (new Date().getTime() < endAt) this.log('Done - Scanned the whole queue');
+        else if (this.options.maxMessages && this.qtyMatched >= this.options.maxMessages) this.log('Done - Maximum number of messages matched');
+        else if (new Date().getTime() < this.endAt) this.log('Done - Scanned the whole queue');
         else this.log('Time exceeded');
         return {
             qtyScanned: this.qtyScanned,
             qtyMatched: this.qtyMatched,
-        }
+        };
     }
 
     /**
@@ -138,18 +131,43 @@ class SqsGrep {
     }
 
     /**
+     * Receives the next messages from the SQS queue
+     */
+    async _receiveMessage() {
+        if (this.options.inputFile) {
+            const message = this.inputFileReader.next();
+            const Messages = message ? [JSON.parse(message)] : [];
+            return { Messages };
+        } else {
+            const elapsedSeconds = parseInt((new Date().getTime() - this.startedAt) / 1000);
+            const res = await this.sqs.receiveMessage({
+                QueueUrl: this.options.sourceQueueUrl,
+                MaxNumberOfMessages: 10,
+                VisibilityTimeout: Math.max(1, this.options.timeout + 10 - elapsedSeconds),
+                MessageAttributeNames: ['All'],
+                AttributeNames: ['All'],
+            }).promise();
+            return res;
+        }
+    }
+
+    /**
      * Connects to all required SQS queues by retrieving their URL
      */
     async _connectToQueues() {
-        this.log(chalk`Connecting to SQS queue '{green ${this.options.queue}}' in the '{green ${this.options.region}}' region...`);
-        this.options.sourceQueueUrl = (await this.sqs.getQueueUrl({
-            QueueName: this.options.queue,
-        }).promise()).QueueUrl;
-        const queueAttributes = await this.sqs.getQueueAttributes({
-            QueueUrl: this.options.sourceQueueUrl,
-            AttributeNames: ['ApproximateNumberOfMessages']
-        }).promise();
-        this.log(chalk`This queue has approximately {green ${queueAttributes.Attributes.ApproximateNumberOfMessages}} messages at the moment.`);
+        if  (this.options.inputFile) {
+            this.inputFileReader = new lineByLine(this.options.inputFile);
+        } else {
+            this.log(chalk`Connecting to SQS queue '{green ${this.options.queue}}' in the '{green ${this.options.region}}' region...`);
+            this.options.sourceQueueUrl = (await this.sqs.getQueueUrl({
+                QueueName: this.options.queue,
+            }).promise()).QueueUrl;
+            const queueAttributes = await this.sqs.getQueueAttributes({
+                QueueUrl: this.options.sourceQueueUrl,
+                AttributeNames: ['ApproximateNumberOfMessages']
+            }).promise();
+            this.log(chalk`This queue has approximately {green ${queueAttributes.Attributes.ApproximateNumberOfMessages}} messages at the moment.`);
+        }
         if (this.options.moveTo) {
             this.log(chalk`Connecting to target SQS queue '{green ${this.options.moveTo}}' in the '{green ${this.options.region}}' region...`);
             this.options.moveToQueueUrl = (await this.sqs.getQueueUrl({
@@ -206,7 +224,8 @@ class SqsGrep {
         }
         const content = options.full ? JSON.stringify({
             Body: message.Body,
-            MessageAttributes: message.MessageAttributes
+            MessageAttributes: message.MessageAttributes,
+            Attributes: message.Attributes,
         }) : message.Body;
 
         if (options.outputFile) {

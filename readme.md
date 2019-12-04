@@ -16,7 +16,7 @@ It can also delete the matching messages, copy/move them to another SQS queue an
 * Find messages matching (or NOT matching) a regular expression
 * Search by message attributes
 * Silent mode if you just want to count the number of matched messages
-* Dump matched messages to file
+* Dump matched messages to file, which can later be used for offline searches or even archiving messages
 * Move matched messages to another SQS queue
 * Copy matched messages to another SQS queue
 * Publish matched messages to an SNS topic
@@ -51,6 +51,12 @@ Delete all messages containing the text 'Error' in the body
 $ sqs-grep --queue MyQueue --delete --body Error
 ```
 
+Archives all messages from a queue into a local file, and then later copy them to another queue
+```
+$ sqs-grep --queue MyQueue --all --outputFile messages.txt --full
+$ sqs-grep --inputFile messages.txt --all --copyTo TargetQueue
+```
+
 # Providing credentials
 By default, sqs-grep will read credentials from the `$HOME/.aws/credentials` file, which can be configured using the AWS CLI (aws configure).
 
@@ -78,7 +84,7 @@ $ sqs-grep --accessKeyId "KEY" --secretAccessKey "SECRET" <other options>
 ```
 $ sqs-grep --help
 
-sqs-grep version 1.8.2
+sqs-grep version 1.9.0
 
 sqs-grep
 
@@ -130,6 +136,8 @@ Other options
   -o, --outputFile file       Write matched messages to the given output file instead of the console.       
                               Combine with --full to have exact message reproduction, one per line in the   
                               output file                                                                   
+  --inputFile file            Reads messages from a local file (generated using --full --outputFile)        
+                              instead of from input queue                                                   
   --endpointUrl URL           Use a custom AWS endpoint URL                                                 
   -h, --help                  Prints this help message                                                      
   -v, --version               Prints the application version                                                
@@ -151,5 +159,10 @@ Usage examples
                                                                                 
   Delete all messages containing the text 'Error' in the body                   
   $ sqs-grep --queue MyQueue --delete --body Error                              
+                                                                                
+  Archives all messages from a queue into a local file, and then later copy     
+  them to another queue                                                         
+  $ sqs-grep --queue MyQueue --all --outputFile messages.txt --full             
+  $ sqs-grep --inputFile messages.txt --all --copyTo TargetQueue                
 
 ```

@@ -41,6 +41,7 @@ const optionDefinitions = [
     { name: 'full', alias: 'f', type: Boolean, defaultValue: false, description: 'Prints a JSON with the full message content (Body and all MessageAttributes)\nBy default, only the message body is printed' },
     { name: 'stripAttributes', type: Boolean, defaultValue: false, description: 'This option will cause all message attributes to be stripped when moving, copying and publishing the message (used with {bold --moveTo}, {bold --copyTo}, {bold --publishTo}, and {bold --republish})' },
     { name: 'outputFile', alias: 'o', typeLabel: '{underline file}', description: 'Write matched messages to the given output file instead of the console. Combine with {bold --full} to have exact message reproduction, one per line in the output file' },
+    { name: 'inputFile', typeLabel: '{underline file}', description: 'Reads messages from a local file (generated using {bold --full --outputFile}) instead of from input queue' },
     { name: 'endpointUrl', typeLabel: '{underline URL}', description: 'Use a custom AWS endpoint URL' },
     { name: 'help', alias: 'h', type: Boolean, defaultValue: false, description: 'Prints this help message' },
     { name: 'version', alias: 'v', type: Boolean, defaultValue: false, description: 'Prints the application version' },
@@ -83,6 +84,10 @@ const usage = [
             + `\n`
             + `{italic Delete all messages containing the text 'Error' in the body}\n`
             + `$ sqs-grep --queue MyQueue --delete --body Error\n`
+            + `\n`
+            + `{italic Archives all messages from a queue into a local file, and then later copy them to another queue}\n`
+            + `$ sqs-grep --queue MyQueue --all --outputFile messages.txt --full\n`
+            + `$ sqs-grep --inputFile messages.txt --all --copyTo TargetQueue\n`
     },
 ];
 
@@ -137,8 +142,11 @@ function validateOptions(options, log) {
         log(chalk`{italic (See all options by specifying {bold --help} in the command-line)}`);
         return false;
     };
-    if (!options.queue) {
-        return error(chalk`{red ERROR: You must specify {bold --queue}}`);
+    if (!options.queue && !options.inputFile) {
+        return error(chalk`{red ERROR: You must specify {bold --queue} or {bold --inputFile}}`);
+    }
+    if (options.queue && options.inputFile) {
+        return error(chalk`{red ERROR: You can't specify both {bold --queue} and {bold --inputFile} (choose one or the other)}`);
     }
     if (!options.all && !options.body && (!options.attribute || !options.attribute.length)) {
         return error(chalk`{red ERROR: You must specify at least one of {bold --all}, {bold --body}, or {bold --attribute}}`);
@@ -151,6 +159,14 @@ function validateOptions(options, log) {
     }
     if (!(options.timeout > 0)) {
         return error(chalk`{red ERROR: Invalid {bold --timeout} value (must be greater than 0)}`);
+    }
+    if (options.inputFile) {
+        if (options.delete) {
+            return error(chalk`{red ERROR: You can't specify both {bold --inputFile} and {bold --delete}!}`);
+        }
+        if (options.moveTo) {
+            return error(chalk`{red ERROR: You can't specify both {bold --inputFile} and {bold --moveTo}! Use {bold --copyTo} instead}`);
+        }
     }
     return true;
 }
@@ -167,8 +183,9 @@ function printMatchingRules(options, log) {
         options.copyTo ? chalk.green('copy') :
         options.delete ? chalk.red('DELETE') :
         'match';
+    const queue = options.inputFile ? 'file' : 'queue';
     if (options.all) {
-        log(chalk`Will ${match} {bold ALL} messages in the queue.`);
+        log(chalk`Will ${match} {bold ALL} messages in the ${queue}.`);
         return;
     }
     if (options.body) {

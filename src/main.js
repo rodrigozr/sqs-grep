@@ -1,5 +1,6 @@
 #! /usr/bin/env node
 
+const process = require('process');
 const prompt = require('password-prompt');
 const {parseOptions} = require('./options');
 const {SqsGrep} = require('./sqs-grep');
@@ -25,6 +26,7 @@ async function main() {
  */
 async function fillInputCredentials(options) {
     if (options.inputCredentials) {
+        /* eslint-disable require-atomic-updates */
         options.accessKeyId = await prompt('AWS access key id:');
         options.secretAccessKey = await prompt('AWS secret access key:');
     }

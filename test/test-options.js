@@ -1,3 +1,4 @@
+/* eslint-disable no-undef */
 const assert = require('assert');
 const sinon = require('sinon');
 const {parseOptions, validateOptions, printMatchingRules} = require('../src/options');
@@ -36,10 +37,11 @@ describe('Options', function () {
             assert.equal(hasLog(/sqs-grep version \d+/), true, 'Should print version on console');
             assert.equal(hasLog(/Main options/), false, 'Should not print help on console');
         });
-        it('should require --queue', function () {
+        it('should require --queue or --inputFile', function () {
             const options = parseOptions(['--parallel', '2']);
             assert.equal(validateOptions(options, log), false);
             assert.equal(hasLog(/--queue/), true);
+            assert.equal(hasLog(/--inputFile/), true);
         });
         it('should require one of --all, --body, or --attribute', function () {
             const options = parseOptions(['--queue', 'TestQueue']);
@@ -72,6 +74,21 @@ describe('Options', function () {
             const options = parseOptions(['--queue', 'TestQueue', '--all', '--timeout', '0']);
             assert.equal(validateOptions(options, log), false);
             assert.equal(hasLog(/ERROR: Invalid .*--timeout.* value \(must be greater than 0\)/), true);
+        });
+        it('should not allow both --inputFile and --delete', function () {
+            const options = parseOptions(['--inputFile', 'TestFile.txt', '--all', '--delete']);
+            assert.equal(validateOptions(options, log), false);
+            assert.equal(hasLog(/ERROR: You can't specify both .*--inputFile.* and .*--delete.*/), true);
+        });
+        it('should not allow both --inputFile and --moveTo', function () {
+            const options = parseOptions(['--inputFile', 'TestFile.txt', '--all', '--moveTo', 'Dest']);
+            assert.equal(validateOptions(options, log), false);
+            assert.equal(hasLog(/ERROR: You can't specify both .*--inputFile.* and .*--moveTo.*/), true);
+        });
+        it('should not allow both --inputFile and --queue', function () {
+            const options = parseOptions(['--inputFile', 'TestFile.txt', '--all', '--queue', 'TestQueue']);
+            assert.equal(validateOptions(options, log), false);
+            assert.equal(hasLog(/ERROR: You can't specify both .*--queue.* and .*--inputFile.*/), true);
         });
         [['--all'], ['--body', 'Test'], ['--attribute', 'key=val']].forEach(arg => {
             it(`should pass with ${arg[0]}`, function () {
