@@ -763,7 +763,7 @@ describe('SqsGrep', function () {
             // assert
             assert.equal(res.qtyScanned, 3);
             assert.equal(res.qtyMatched, 3);
-            assert.equal(fs.readFileSync('.out', 'utf-8'), '1\n2\n3\n');
+            assert.equal(fs.readFileSync('.out', 'utf-8'), `{"Body":"1"}\n{"Body":"2"}\n{"Body":"3"}\n`);
             fs.unlinkSync('.out');
         });
 

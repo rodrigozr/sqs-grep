@@ -84,7 +84,7 @@ $ sqs-grep --accessKeyId "KEY" --secretAccessKey "SECRET" <other options>
 ```
 $ sqs-grep --help
 
-sqs-grep version 1.9.0
+sqs-grep version 1.9.1
 
 sqs-grep
 
@@ -133,11 +133,11 @@ Other options
   --stripAttributes           This option will cause all message attributes to be stripped when moving,     
                               copying and publishing the message (used with --moveTo, --copyTo,             
                               --publishTo, and --republish)                                                 
-  -o, --outputFile file       Write matched messages to the given output file instead of the console.       
-                              Combine with --full to have exact message reproduction, one per line in the   
-                              output file                                                                   
-  --inputFile file            Reads messages from a local file (generated using --full --outputFile)        
-                              instead of from input queue                                                   
+  -o, --outputFile file       Write matched messages to the given output file instead of the console. Using 
+                              this option automatically sets --full to have exact message reproduction,     
+                              which can be later used with --inputFile                                      
+  --inputFile file            Reads messages from a local file (generated using --outputFile) instead of    
+                              from input queue                                                              
   --endpointUrl URL           Use a custom AWS endpoint URL                                                 
   -h, --help                  Prints this help message                                                      
   -v, --version               Prints the application version                                                
