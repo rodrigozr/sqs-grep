@@ -16,67 +16,68 @@ It can also delete the matching messages, copy/move them to another SQS queue an
 * Find messages matching (or NOT matching) a regular expression
 * Search by message attributes
 * Silent mode if you just want to count the number of matched messages
-* Dump matched messages to file, which can later be used for offline searches or even archiving messages
-* Move matched messages to another SQS queue
-* Copy matched messages to another SQS queue
-* Publish matched messages to an SNS topic
+* Dump matched messages to file, which can later be used for offline processing and archival
+* Move/copy matched messages to another SQS queue
+* Publish matched messages to an SNS topic (or re-publish to the original topic if the message originally came from SNS)
 * Delete matched messages
 * Parallel scan for higher throughput
 * Cross-platform, with pre-built binaries for Linux, MacOS and Windows
-* Supports FIFO queues for both sources and targets (--copyTo, --moveTo)
+* Supports FIFO queues for both sources and targets
 
 # Usage examples
 Find messages containing the text 'Error' in the body:
-```
+```sh
 $ sqs-grep --queue MyQueue --body "Error"
 ```
 
 Find messages NOT containing any three-digit numbers in the body:
-```
+```sh
 $ sqs-grep --queue MyQueue --negate --body "\\d{3}"
 ```
 
 Find messages containing a string attribute called 'Error' and that attribute does NOT contain any three-digit numbers in its value:     
-```
+```sh
 $ sqs-grep --queue MyQueue --negate --attribute "Error=\\d{3}"
 ```
 
 Move all messages from one queue to another
-```
+```sh
 $ sqs-grep --queue MyQueue --moveTo DestQueue --all
 ```
 
 Delete all messages containing the text 'Error' in the body
-```
+```sh
 $ sqs-grep --queue MyQueue --delete --body Error
 ```
 
 Archives all messages from a queue into a local file, and then later copy them to another queue
-```
+```sh
 $ sqs-grep --queue MyQueue --all --outputFile messages.txt --full
 $ sqs-grep --inputFile messages.txt --all --copyTo TargetQueue
 ```
 
 # Providing credentials
-By default, sqs-grep will read credentials from the `$HOME/.aws/credentials` file, which can be configured using the AWS CLI (aws configure).
+By default, sqs-grep will read credentials from the `$HOME/.aws/credentials` file, which can be configured using the AWS CLI (`aws configure`).
 
 You also have the options below to provide credentials:
 
 ## Prompting for credentials
-```
+```sh
 $ sqs-grep --inputCredentials <other options>
+AWS access key id:**************
+AWS secret access key:****************************
 ```
 
 ## Using an external credential provider
 You can use an external credential provider tool as long as it outputs two separated lines
 containing the AWS "access key id" and "secret access key" (in that order).
-```
+```sh
 $ get-aws-credentials | sqs-grep --inputCredentials <other options>
 ```
 
 ## Providing credentials in the command-line (not recommended)
 This option is simple, but not recommended as the credentials may be easily accessible by other processes
-```
+```sh
 $ sqs-grep --accessKeyId "KEY" --secretAccessKey "SECRET" <other options>
 ```
 
