@@ -192,7 +192,36 @@ describe('SqsGrep', function () {
             // assert
             assert.equal(res.qtyScanned, 3);
             assert.equal(res.qtyMatched, 3);
-        });        
+        });
+
+        it('should wait between empty receives', async function () {
+            // arrange
+            const clock = sinon.useFakeTimers();
+            const options = parse(['--queue=A', '--all', '--wait=3', '--emptyReceives=3']);
+            const sqsGrep = new SqsGrep(options);
+            [0,1,2,3,4].forEach(call => {
+                sqs.receiveMessage.onCall(call).returns({
+                    promise: () => Promise.resolve({Messages: []})
+                });
+            });
+            const originalDelay = sqsGrep._delay;
+            let delayCalled = 0;
+            sinon.replace(sqsGrep, '_delay', ms => {
+                const res = originalDelay(ms);
+                clock.tick(3000);
+                delayCalled++;
+                return res;
+            });
+            
+            // act
+            const resPromise = sqsGrep.run();
+            const res = await resPromise;
+
+            // assert
+            assert.equal(res.qtyScanned, 0);
+            assert.equal(res.qtyMatched, 0);
+            assert.equal(delayCalled, 2);
+        });
 
         it('should filter messages', async function () {
             // arrange

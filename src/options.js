@@ -18,7 +18,7 @@ const parseAttribute = str => ({
  */
 const optionDefinitions = [
     // Main
-    { name: 'queue', alias: 'q', description: '{bold (mandatory)} SQS Queue name', group: 'main' },
+    { name: 'queue', alias: 'q', description: 'SQS Queue name', group: 'main' },
     { name: 'region', alias: 'r', defaultValue: 'us-east-1', description: 'AWS region name', group: 'main' },
     { name: 'body', alias: 'b', type: RegExp, group: 'main', description: 'Optional regular expression pattern to match the message body' },
     { name: 'attribute', alias: 'a', group: 'main', multiple: true, type: parseAttribute, typeLabel: '{underline attr}={underline regexp}', description: 'Matches a message attribute\nYou can set this option multiple times to match multiple attributes' },
@@ -42,6 +42,8 @@ const optionDefinitions = [
     { name: 'stripAttributes', type: Boolean, defaultValue: false, description: 'This option will cause all message attributes to be stripped when moving, copying and publishing the message (used with {bold --moveTo}, {bold --copyTo}, {bold --publishTo}, and {bold --republish})' },
     { name: 'outputFile', alias: 'o', typeLabel: '{underline file}', description: 'Write matched messages to the given output file instead of the console. Using this option automatically sets {bold --full} to have exact message reproduction, which can be later used with {bold --inputFile}' },
     { name: 'inputFile', typeLabel: '{underline file}', description: 'Reads messages from a local file (generated using {bold --outputFile}) instead of from input queue' },
+    { name: 'emptyReceives', alias: 'e', type: Number, defaultValue: 5, description: 'Consider the queue fully scanned after this number of consecutive "empty receives" (default: 5)' },
+    { name: 'wait', alias: 'w', type: Number, typeLabel: '{underline seconds}', defaultValue: 0, description: 'Number of seconds to wait after each "empty receive" (default: 0 - do not wait)' },
     { name: 'endpointUrl', typeLabel: '{underline URL}', description: 'Use a custom AWS endpoint URL' },
     { name: 'help', alias: 'h', type: Boolean, defaultValue: false, description: 'Prints this help message' },
     { name: 'version', alias: 'v', type: Boolean, defaultValue: false, description: 'Prints the application version' },

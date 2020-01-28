@@ -85,7 +85,7 @@ $ sqs-grep --accessKeyId "KEY" --secretAccessKey "SECRET" <other options>
 ```
 $ sqs-grep --help
 
-sqs-grep version 1.9.1
+sqs-grep version 1.10.0
 
 sqs-grep
 
@@ -94,7 +94,7 @@ sqs-grep
 
 Main options
 
-  -q, --queue string            (mandatory) SQS Queue name                                                    
+  -q, --queue string            SQS Queue name                                                                
   -r, --region string           AWS region name                                                               
   -b, --body regexp             Optional regular expression pattern to match the message body                 
   -a, --attribute attr=regexp   Matches a message attribute                                                   
@@ -120,28 +120,32 @@ Credential options
 
 Other options
 
-  -n, --negate                Negates the result of the pattern matching                                    
-                              (I.e.: to find messages NOT containing a text)                                
-  -t, --timeout seconds       Timeout for the whole operation to complete.                                  
-                              The message visibility timeout will be calculated based on this value as well 
-                              and the elapsed time to ensure that messages become visible again as soon as  
-                              possible.                                                                     
-  -m, --maxMessages integer   Maximum number of messages to match                                           
-  -j, --parallel number       Number of parallel pollers to start (to speed-up the scan)                    
-  -s, --silent                Does not print the message contents (only count them)                         
-  -f, --full                  Prints a JSON with the full message content (Body and all MessageAttributes)  
-                              By default, only the message body is printed                                  
-  --stripAttributes           This option will cause all message attributes to be stripped when moving,     
-                              copying and publishing the message (used with --moveTo, --copyTo,             
-                              --publishTo, and --republish)                                                 
-  -o, --outputFile file       Write matched messages to the given output file instead of the console. Using 
-                              this option automatically sets --full to have exact message reproduction,     
-                              which can be later used with --inputFile                                      
-  --inputFile file            Reads messages from a local file (generated using --outputFile) instead of    
-                              from input queue                                                              
-  --endpointUrl URL           Use a custom AWS endpoint URL                                                 
-  -h, --help                  Prints this help message                                                      
-  -v, --version               Prints the application version                                                
+  -n, --negate                 Negates the result of the pattern matching                                    
+                               (I.e.: to find messages NOT containing a text)                                
+  -t, --timeout seconds        Timeout for the whole operation to complete.                                  
+                               The message visibility timeout will be calculated based on this value as well 
+                               and the elapsed time to ensure that messages become visible again as soon as  
+                               possible.                                                                     
+  -m, --maxMessages integer    Maximum number of messages to match                                           
+  -j, --parallel number        Number of parallel pollers to start (to speed-up the scan)                    
+  -s, --silent                 Does not print the message contents (only count them)                         
+  -f, --full                   Prints a JSON with the full message content (Body and all MessageAttributes)  
+                               By default, only the message body is printed                                  
+  --stripAttributes            This option will cause all message attributes to be stripped when moving,     
+                               copying and publishing the message (used with --moveTo, --copyTo,             
+                               --publishTo, and --republish)                                                 
+  -o, --outputFile file        Write matched messages to the given output file instead of the console. Using 
+                               this option automatically sets --full to have exact message reproduction,     
+                               which can be later used with --inputFile                                      
+  --inputFile file             Reads messages from a local file (generated using --outputFile) instead of    
+                               from input queue                                                              
+  -e, --emptyReceives number   Consider the queue fully scanned after this number of consecutive "empty      
+                               receives" (default: 5)                                                        
+  -w, --wait seconds           Number of seconds to wait after each "empty receive" (default: 0 - do not     
+                               wait)                                                                         
+  --endpointUrl URL            Use a custom AWS endpoint URL                                                 
+  -h, --help                   Prints this help message                                                      
+  -v, --version                Prints the application version                                                
 
 Usage examples
 

@@ -60,7 +60,11 @@ class SqsGrep {
                 try {
                     const res = await this._receiveMessage();
                     if (!res.Messages || !res.Messages.length) {
-                        if (++this.emptyReceives < 5) {
+                        // Handle "empty receives"
+                        if (++this.emptyReceives < this.options.emptyReceives) {
+                            if (this.options.wait > 0) {
+                                await this._delay(this.options.wait * 1000);
+                            }
                             continue;
                         } else {
                             break;
@@ -342,6 +346,14 @@ class SqsGrep {
             // ignore
         }
         return body;
+    }
+
+    /**
+     * Returns a promise which resolves after the given number of milliseconds
+     * @param {Number} ms milliseconds
+     */
+    _delay(ms) {
+        return new Promise(resolve => setTimeout(() => resolve(), ms));
     }
 }
 
