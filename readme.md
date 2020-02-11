@@ -52,7 +52,7 @@ $ sqs-grep --queue MyQueue --delete --body Error
 
 Archives all messages from a queue into a local file, and then later copy them to another queue
 ```sh
-$ sqs-grep --queue MyQueue --all --outputFile messages.txt --full
+$ sqs-grep --queue MyQueue --all --outputFile messages.txt
 $ sqs-grep --inputFile messages.txt --all --copyTo TargetQueue
 ```
 
@@ -167,7 +167,7 @@ Usage examples
                                                                                 
   Archives all messages from a queue into a local file, and then later copy     
   them to another queue                                                         
-  $ sqs-grep --queue MyQueue --all --outputFile messages.txt --full             
+  $ sqs-grep --queue MyQueue --all --outputFile messages.txt                    
   $ sqs-grep --inputFile messages.txt --all --copyTo TargetQueue                
 
 ```

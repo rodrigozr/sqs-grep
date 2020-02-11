@@ -88,7 +88,7 @@ const usage = [
             + `$ sqs-grep --queue MyQueue --delete --body Error\n`
             + `\n`
             + `{italic Archives all messages from a queue into a local file, and then later copy them to another queue}\n`
-            + `$ sqs-grep --queue MyQueue --all --outputFile messages.txt --full\n`
+            + `$ sqs-grep --queue MyQueue --all --outputFile messages.txt\n`
             + `$ sqs-grep --inputFile messages.txt --all --copyTo TargetQueue\n`
     },
 ];
