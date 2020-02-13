@@ -99,7 +99,7 @@ class SqsGrep {
         if (!this.running) this.log('Interrupted');
         else if (this.options.maxMessages && this.qtyMatched >= this.options.maxMessages) this.log('Done - Maximum number of messages matched');
         else if (new Date().getTime() < this.endAt) this.log('Done - Scanned the whole queue');
-        else this.log('Time exceeded');
+        else this.log(chalk`Time exceeded ({bold --timeout} is set to ${this.options.timeout.toFixed(1)} seconds)`);
         return {
             qtyScanned: this.qtyScanned,
             qtyMatched: this.qtyMatched,
