@@ -4,8 +4,11 @@
 src/main.js --version || exit 1
 
 # Run the tests with code coverage
-./node_modules/.bin/istanbul cover \
-    ./node_modules/mocha/bin/mocha --report lcovonly -- -R spec || exit 1
+./node_modules/.bin/nyc ./node_modules/mocha/bin/mocha || exit 1
+
+# Generate the coverage report
+mkdir ./coverage
+./node_modules/.bin/nyc report --reporter=text-lcov > ./coverage/lcov.info || exit 1
 
 # When running on Travis, also upload the coverate results to coveralls
 [ "$TRAVIS_JOB_ID" = "" ] || cat ./coverage/lcov.info | ./node_modules/coveralls/bin/coveralls.js || exit 1
