@@ -15,6 +15,11 @@
     "snyk-test": "snyk test",
     "snyk-monitor": "snyk monitor"
   },
+  "nyc": {
+    "include": ["src/**"],
+    "exclude": ["src/main.js"],
+    "reporter": ["text", "lcov"]
+  },
   "repository": {
     "type": "git",
     "url": "git+https://github.com/rodrigozr/sqs-grep.git"
