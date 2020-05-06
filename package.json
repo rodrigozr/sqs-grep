@@ -1,6 +1,6 @@
 {
   "name": "sqs-grep",
-  "version": "1.10.3",
+  "version": "1.10.4",
   "description": "Greps AWS SQS messages from the command-line, optionally moving or deleting them",
   "main": "index.js",
   "bin": {
@@ -16,9 +16,16 @@
     "snyk-monitor": "snyk monitor"
   },
   "nyc": {
-    "include": ["src/**"],
-    "exclude": ["src/main.js"],
-    "reporter": ["text", "lcov"]
+    "include": [
+      "src/**"
+    ],
+    "exclude": [
+      "src/main.js"
+    ],
+    "reporter": [
+      "text",
+      "lcov"
+    ]
   },
   "repository": {
     "type": "git",
@@ -35,7 +42,7 @@
   "author": "Rodrigo Rosauro",
   "license": "MIT",
   "dependencies": {
-    "aws-sdk": "^2.644.0",
+    "aws-sdk": "^2.670.0",
     "chalk": "^2.4.2",
     "command-line-args": "^5.1.1",
     "command-line-usage": "^6.1.0",
@@ -43,13 +50,13 @@
     "password-prompt": "^1.1.2"
   },
   "devDependencies": {
-    "coveralls": "^3.0.11",
+    "coveralls": "^3.1.0",
     "eslint": "^6.8.0",
-    "mocha": "^6.2.2",
+    "mocha": "^6.2.3",
     "mocha-lcov-reporter": "^1.3.0",
-    "nyc": "^15.0.0",
-    "pkg": "^4.4.4",
+    "nyc": "^15.0.1",
+    "pkg": "^4.4.8",
     "sinon": "^7.5.0",
-    "snyk": "^1.303.2"
+    "snyk": "^1.319.0"
   }
 }
