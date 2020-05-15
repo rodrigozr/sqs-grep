@@ -81,11 +81,23 @@ This option is simple, but not recommended as the credentials may be easily acce
 $ sqs-grep --accessKeyId "KEY" --secretAccessKey "SECRET" <other options>
 ```
 
+# Providing queue names or URLs
+The options `--queue`, `--moveTo`, and `--copyTo` all support either a **queue name** or a **queue URL**.
+
+If you provide a **queue name**, the URL will be automatically determined by connecting to the given AWS `--region`.
+Using **queue URLs** allows you to copy or move messages between regions and even accounts
+(as long as your credentials allow it).
+
+In case you need to copy or move messages between accounts using different access credentials
+(one for the source and another for the target), you still do it in two separate steps using the
+`--outputFile` option (first download all the messages to a local file and then copy them to the
+target account). 
+
 # Options
 ```
 $ sqs-grep --help
 
-sqs-grep version 1.10.0
+sqs-grep version 1.11.0
 
 sqs-grep
 
@@ -94,14 +106,14 @@ sqs-grep
 
 Main options
 
-  -q, --queue string            SQS Queue name                                                                
+  -q, --queue string            Source SQS Queue name or URL                                                  
   -r, --region string           AWS region name                                                               
   -b, --body regexp             Optional regular expression pattern to match the message body                 
   -a, --attribute attr=regexp   Matches a message attribute                                                   
                                 You can set this option multiple times to match multiple attributes           
   --delete                      Delete matched messages from the queue (use with caution)                     
-  --moveTo queue name           Move matched messages to the given destination queue                          
-  --copyTo queue name           Copy matched messages to the given destination queue                          
+  --moveTo string               Move matched messages to the given destination queue name or URL              
+  --copyTo string               Copy matched messages to the given destination queue name or URL              
   --publishTo topic ARN         Publish matched messages to the given destination SNS topic                   
   --republish                   Republish messages that originated from SNS back to their topic of origin.    
                                 This option is typically used together with the --delete option to re-process 

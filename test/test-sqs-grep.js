@@ -462,6 +462,33 @@ describe('SqsGrep', function () {
             assert.equal(res.qtyMatched, 2);
         });
 
+        it('should connect to queue URLs', async function () {
+            // arrange
+            const options = parse(['--queue=fake://queueA', '--all', '--copyTo=fake://queueB', '--moveTo=fake://queueC']);
+            const sqsGrep = new SqsGrep(options);
+            sqs.receiveMessage.onFirstCall().returns({
+                promise: () => Promise.resolve({Messages: [
+                    {Body: '1', MessageAttributes:{key: {StringValue: 'val'}}},
+                    {Body: '2'},
+                ]})
+            });
+            [1,2,3,4,5,6].forEach(call => {
+                sqs.receiveMessage.onCall(call).returns({
+                    promise: () => Promise.resolve({Messages: []})
+                });
+            });
+            
+            // act
+            const res = await sqsGrep.run();
+
+            // assert
+            assert.equal(sqs.getQueueUrl.callCount, 0);
+            assert.equal(sqs.sendMessage.callCount, 4);
+            assert.equal(sqs.deleteMessage.callCount, 2);
+            assert.equal(res.qtyScanned, 2);
+            assert.equal(res.qtyMatched, 2);
+        });
+
         it('should copy messages stripping attributes', async function () {
             // arrange
             const options = parse(['--queue=A', '--all', '--copyTo=B', '--stripAttributes']);

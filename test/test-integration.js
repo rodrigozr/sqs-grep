@@ -184,6 +184,18 @@ describe('Integration Tests', function () {
     });
     it('should move and copy the queue', async function () {
         // act
+        const {qtyScanned, qtyMatched} = await new SqsGrep(parse(['--queue', queueUrl1, '--moveTo', queueUrl2, '--copyTo', queueUrl3, '--body=test'])).run();
+        
+        // assert
+        assert.equal(qtyScanned, 4);
+        assert.equal(qtyMatched, 2);
+        assert.equal(await getQueueAttribute(queueUrl2, 'ApproximateNumberOfMessages'), 2);
+        assert.equal(await getQueueAttribute(queueUrl3, 'ApproximateNumberOfMessages'), 2);
+        assert.equal(await getQueueAttribute(queueUrl1, 'ApproximateNumberOfMessages'), 0);
+        assert.equal(await getQueueAttribute(queueUrl1, 'ApproximateNumberOfMessagesNotVisible'), 2);
+    });
+    it('should support queue URLs', async function () {
+        // act
         const {qtyScanned, qtyMatched} = await new SqsGrep(parse(['--queue=Queue1', '--moveTo=Queue2', '--copyTo=Queue3', '--body=test'])).run();
         
         // assert

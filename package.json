@@ -1,6 +1,6 @@
 {
   "name": "sqs-grep",
-  "version": "1.10.4",
+  "version": "1.11.0",
   "description": "Greps AWS SQS messages from the command-line, optionally moving or deleting them",
   "main": "index.js",
   "bin": {
@@ -42,7 +42,7 @@
   "author": "Rodrigo Rosauro",
   "license": "MIT",
   "dependencies": {
-    "aws-sdk": "^2.670.0",
+    "aws-sdk": "^2.677.0",
     "chalk": "^2.4.2",
     "command-line-args": "^5.1.1",
     "command-line-usage": "^6.1.0",
@@ -57,6 +57,6 @@
     "nyc": "^15.0.1",
     "pkg": "^4.4.8",
     "sinon": "^7.5.0",
-    "snyk": "^1.319.0"
+    "snyk": "^1.321.0"
   }
 }

@@ -156,33 +156,42 @@ class SqsGrep {
     }
 
     /**
+     * Connects to the given queue name or URL
+     * @param {String} queue queue name or URL
+     */
+    async _connectToQueue(queue) {
+        let queueUrl;
+        if (/^\w+:\/\/.+$/.test(queue)) {
+            this.log(chalk`Connecting to SQS queue URL '{green ${queue}}' ...`);
+            queueUrl = queue;
+        } else {
+            this.log(chalk`Connecting to SQS queue '{green ${queue}}' in the '{green ${this.options.region}}' region...`);
+            queueUrl = (await this.sqs.getQueueUrl({
+                QueueName: queue,
+            }).promise()).QueueUrl;
+        }
+        const queueAttributes = await this.sqs.getQueueAttributes({
+            QueueUrl: queueUrl,
+            AttributeNames: ['ApproximateNumberOfMessages']
+        }).promise();
+        this.log(chalk`This queue has approximately {green ${queueAttributes.Attributes.ApproximateNumberOfMessages}} messages at the moment.`);
+        return queueUrl;
+    }
+
+    /**
      * Connects to all required SQS queues by retrieving their URL
      */
     async _connectToQueues() {
         if  (this.options.inputFile) {
             this.inputFileReader = new lineByLine(this.options.inputFile);
         } else {
-            this.log(chalk`Connecting to SQS queue '{green ${this.options.queue}}' in the '{green ${this.options.region}}' region...`);
-            this.options.sourceQueueUrl = (await this.sqs.getQueueUrl({
-                QueueName: this.options.queue,
-            }).promise()).QueueUrl;
-            const queueAttributes = await this.sqs.getQueueAttributes({
-                QueueUrl: this.options.sourceQueueUrl,
-                AttributeNames: ['ApproximateNumberOfMessages']
-            }).promise();
-            this.log(chalk`This queue has approximately {green ${queueAttributes.Attributes.ApproximateNumberOfMessages}} messages at the moment.`);
+            this.options.sourceQueueUrl = await this._connectToQueue(this.options.queue);
         }
         if (this.options.moveTo) {
-            this.log(chalk`Connecting to target SQS queue '{green ${this.options.moveTo}}' in the '{green ${this.options.region}}' region...`);
-            this.options.moveToQueueUrl = (await this.sqs.getQueueUrl({
-                QueueName: this.options.moveTo,
-            }).promise()).QueueUrl;
+            this.options.moveToQueueUrl = await this._connectToQueue(this.options.moveTo);
         }
         if (this.options.copyTo) {
-            this.log(chalk`Connecting to target SQS queue '{green ${this.options.copyTo}}' in the '{green ${this.options.region}}' region...`);
-            this.options.copyToQueueUrl = (await this.sqs.getQueueUrl({
-                QueueName: this.options.copyTo,
-            }).promise()).QueueUrl;
+            this.options.copyToQueueUrl = await this._connectToQueue(this.options.copyTo);
         }
         if (this.options.publishTo) {
             this.log(chalk`Connecting to target SNS topic '{green ${this.options.publishTo}}' in the '{green ${this.options.region}}' region...`);
