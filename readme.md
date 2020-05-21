@@ -97,7 +97,7 @@ target account).
 ```
 $ sqs-grep --help
 
-sqs-grep version 1.11.0
+sqs-grep version 1.12.0
 
 sqs-grep
 
@@ -156,6 +156,7 @@ Other options
   -w, --wait seconds           Number of seconds to wait after each "empty receive" (default: 0 - do not     
                                wait)                                                                         
   --endpointUrl URL            Use a custom AWS endpoint URL                                                 
+  --maxTPS number              Maximum number of messages to process per second (default: no limit)          
   -h, --help                   Prints this help message                                                      
   -v, --version                Prints the application version                                                
 

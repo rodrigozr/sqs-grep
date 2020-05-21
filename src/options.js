@@ -45,6 +45,7 @@ const optionDefinitions = [
     { name: 'emptyReceives', alias: 'e', type: Number, defaultValue: 5, description: 'Consider the queue fully scanned after this number of consecutive "empty receives" (default: 5)' },
     { name: 'wait', alias: 'w', type: Number, typeLabel: '{underline seconds}', defaultValue: 0, description: 'Number of seconds to wait after each "empty receive" (default: 0 - do not wait)' },
     { name: 'endpointUrl', typeLabel: '{underline URL}', description: 'Use a custom AWS endpoint URL' },
+    { name: 'maxTPS', type: Number, defaultValue: 0, description: 'Maximum number of messages to process per second (default: no limit)' },
     { name: 'help', alias: 'h', type: Boolean, defaultValue: false, description: 'Prints this help message' },
     { name: 'version', alias: 'v', type: Boolean, defaultValue: false, description: 'Prints the application version' },
 ];

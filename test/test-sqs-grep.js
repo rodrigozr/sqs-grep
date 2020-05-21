@@ -223,6 +223,33 @@ describe('SqsGrep', function () {
             assert.equal(delayCalled, 2);
         });
 
+        it('should limit max TPS with a valid TPS', async function () {
+            // arrange
+            const options = parse(['--queue=A', '--all', '--maxTPS=1', '--emptyReceives=1']);
+            
+            // act
+            const sqsGrep = new SqsGrep(options);
+
+            // assert            
+            // Note:
+            //  I could not find a way to reliably test the throttling.
+            //  Even using sinon.useFakeTimers didn't work as expected with the "bottleneck"
+            //  library, so I'm just checking if the function was properly wrapped
+            //  when it should and the "real" test in the integration suite
+            assert.equal(sqsGrep._processMatchedSqsMessage.name, 'wrapped');
+        });
+
+        it('should not limit max TPS with an invalid TPS', async function () {
+            // arrange
+            const options = parse(['--queue=A', '--all', '--maxTPS=9000', '--emptyReceives=1']);
+            
+            // act
+            const sqsGrep = new SqsGrep(options);
+
+            // assert            
+            assert.equal(sqsGrep._processMatchedSqsMessage.name, '_processMatchedSqsMessage');
+        });
+
         it('should filter messages', async function () {
             // arrange
             const options = parse(['--queue=A', '--body=2']);

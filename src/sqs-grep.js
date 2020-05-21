@@ -3,7 +3,8 @@ const os = require('os');
 const chalk = require('chalk');
 const AWS = require('aws-sdk');
 const lineByLine = require('n-readlines');
-const {validateOptions, printMatchingRules, parseOptions} = require('./options');
+const Bottleneck = require('bottleneck');
+const { validateOptions, printMatchingRules, parseOptions } = require('./options');
 
 /**
  * Main sqs-grep executor class
@@ -34,6 +35,7 @@ class SqsGrep {
         this.emptyReceives = 0;
         this.qtyScanned = 0;
         this.qtyMatched = 0;
+        this._configureThrottling();
     }
 
     /**
@@ -111,6 +113,19 @@ class SqsGrep {
      */
     interrupt() {
         this.running = false;
+    }
+
+    /**
+     * Configure throttling, if --maxTPS is set
+     */
+    _configureThrottling() {
+        if (this.options.maxTPS && this.options.maxTPS > 0) {
+            const minTime = parseInt(1000 / this.options.maxTPS);
+            if (minTime > 0) {
+                this.rate_limiter = new Bottleneck({ minTime });
+                this._processMatchedSqsMessage = this.rate_limiter.wrap(this._processMatchedSqsMessage);
+            }
+        }
     }
 
     /**

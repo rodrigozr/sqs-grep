@@ -184,7 +184,7 @@ describe('Integration Tests', function () {
     });
     it('should move and copy the queue', async function () {
         // act
-        const {qtyScanned, qtyMatched} = await new SqsGrep(parse(['--queue', queueUrl1, '--moveTo', queueUrl2, '--copyTo', queueUrl3, '--body=test'])).run();
+        const {qtyScanned, qtyMatched} = await new SqsGrep(parse(['--queue=Queue1', '--moveTo=Queue2', '--copyTo=Queue3', '--body=test'])).run();
         
         // assert
         assert.equal(qtyScanned, 4);
@@ -196,7 +196,7 @@ describe('Integration Tests', function () {
     });
     it('should support queue URLs', async function () {
         // act
-        const {qtyScanned, qtyMatched} = await new SqsGrep(parse(['--queue=Queue1', '--moveTo=Queue2', '--copyTo=Queue3', '--body=test'])).run();
+        const {qtyScanned, qtyMatched} = await new SqsGrep(parse(['--queue', queueUrl1, '--moveTo', queueUrl2, '--copyTo', queueUrl3, '--body=test'])).run();
         
         // assert
         assert.equal(qtyScanned, 4);
@@ -236,6 +236,18 @@ describe('Integration Tests', function () {
         assert.equal(qtyScanned, 4);
         assert.equal(qtyMatched, 2);
         assert.equal(await getQueueAttribute(fifoQueueUrl, 'ApproximateNumberOfMessages'), 2);
+    });
+    it('should limit max TPS', async function () {
+        // arrange
+        const startTime = Date.now();
+
+        // act
+        await new SqsGrep(parse(['--maxTPS=4', '--queue=Queue1', '--moveTo=Queue2', '--copyTo=Queue3', '--all'])).run();
+        const elapsedTime = Date.now() - startTime;
+        
+        // assert
+        //   (one message processed every 250ms, with the first one being immediate)
+        assert(elapsedTime >= 750);
     });
 
 });
