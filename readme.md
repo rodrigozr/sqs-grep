@@ -93,6 +93,29 @@ In case you need to copy or move messages between accounts using different acces
 `--outputFile` option (first download all the messages to a local file and then copy them to the
 target account). 
 
+# Operation timeout and SQS visibility timeouts
+In order to scan through the SQS queue, `sqs-grep` must set an appropriate "message visibility timeout"
+when receiving the messages (otherwise, the messages would become visible again in the queue before we
+finished scanning the queue).
+
+The way that sqs-grep does that is that it will automatically determine a "safe" visibility timeout for
+each individual receive operation based on the `--timeout` option (which defaults to **1 minute**). This
+ensures that messages will remain "in-flight" for the shortest possible timeframe that is safe. For
+example, if you use the default timeout of 1 minute and your scan completes in 40 seconds, you can expect
+all scanned messages to become visible again in approximately 20 seconds after the scan is completed.
+
+Notice that, if the execution does not finish within the `--timeout`, sqs-grep will immediately stop the
+processing with a proper warning message.
+
+## Why doesn't sqs-grep immediatelly makes the messages visible again after completing the execution?
+Good question! The AWS SQS console does that, for example, so why don't we do the same?
+
+The fact is that sqs-grep was designed to process arbitratly large SQS queues, and that would require
+storing receipt handles in memory to then later make the messages visible again. For large queues, this
+is simply not feasible, as we would need several GB of RAM just for that. Also, making the messages
+visible again is a billed API call, and it would take some time to execute after the scan is completed,
+which is also problematic for large queues.
+
 # Options
 ```
 $ sqs-grep --help
