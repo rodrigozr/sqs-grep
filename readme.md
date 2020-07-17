@@ -57,9 +57,11 @@ $ sqs-grep --inputFile messages.txt --all --copyTo TargetQueue
 ```
 
 # Providing credentials
-By default, sqs-grep will read credentials from the `$HOME/.aws/credentials` file, which can be configured using the AWS CLI (`aws configure`).
+By default, sqs-grep will read credentials from:
+* The [AWS shared credentials file](https://docs.aws.amazon.com/sdk-for-javascript/v2/developer-guide/loading-node-credentials-shared.html) `$HOME/.aws/credentials` file, which can be configured using the AWS CLI (`aws configure`).
+* The [AWS credentials environment variable](https://docs.aws.amazon.com/sdk-for-javascript/v2/developer-guide/loading-node-credentials-environment.html) (`AWS_ACCESS_KEY_ID` and `AWS_SECRET_ACCESS_KEY`).
 
-You also have the options below to provide credentials:
+However, you also have the options below to provide credentials:
 
 ## Prompting for credentials
 ```sh
