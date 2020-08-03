@@ -122,7 +122,7 @@ which is also problematic for large queues.
 ```
 $ sqs-grep --help
 
-sqs-grep version 1.12.0
+sqs-grep version 1.13.0
 
 sqs-grep
 
@@ -182,6 +182,8 @@ Other options
                                wait)                                                                         
   --endpointUrl URL            Use a custom AWS endpoint URL                                                 
   --maxTPS number              Maximum number of messages to process per second (default: no limit)          
+  --maxRetries number          Maximum number of retries for failed API calls (default: 3)                   
+  --verbose                    Enables verbose logging, which will also log all individual AWS API calls     
   -h, --help                   Prints this help message                                                      
   -v, --version                Prints the application version                                                
 

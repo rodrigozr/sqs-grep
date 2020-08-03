@@ -135,7 +135,8 @@ class SqsGrep {
      */
     static _getAwsOptions(options) {
         const opts = {
-            region: options.region
+            region: options.region,
+            maxRetries: options.maxRetries,
         };
         if (options.accessKeyId) {
             opts.accessKeyId = options.accessKeyId;
@@ -145,6 +146,9 @@ class SqsGrep {
         }
         if (options.endpointUrl) {
             opts.endpoint = new AWS.Endpoint(options.endpointUrl);
+        }
+        if (options.verbose) {
+            opts.logger = { log: options.log || console.log };
         }
         return opts;
     }

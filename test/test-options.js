@@ -18,6 +18,10 @@ describe('Options', function () {
             const options = parseOptions(['--version']);
             assert.equal(options.parallel, 1, 'Parallel should be 1 by default');
         });
+        it('should default maxRetries to 3', function () {
+            const options = parseOptions(['--version']);
+            assert.equal(options.maxRetries, 3, 'maxRetries should be 3 by default');
+        });
     });
     describe('#validateOptions()', function () {
         let logs, log;

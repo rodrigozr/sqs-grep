@@ -889,5 +889,30 @@ describe('SqsGrep', function () {
             assert.rejects(sqsGrep.run(), new Error('Fake error'));
             assert.equal(sqsGrep.running, false);
         });
+
+        it('should log AWS calls when --verbose is set (custom log)', async function () {
+            // arrange
+            const options = parse(['--queue=A', '--all', '--verbose']);
+            function log() { }
+            options.log = log;
+
+            // act
+            const awsOptions = SqsGrep._getAwsOptions(options);
+
+            // assert
+            assert(awsOptions.logger.log === log);
+        });
+
+        it('should log AWS calls when --verbose is set', async function () {
+            // arrange
+            const options = parse(['--queue=A', '--all', '--verbose']);
+            options.log = undefined;
+
+            // act
+            const awsOptions = SqsGrep._getAwsOptions(options);
+
+            // assert
+            assert(awsOptions.logger.log === console.log);
+        });
     });
 });
