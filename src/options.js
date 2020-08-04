@@ -21,13 +21,14 @@ const optionDefinitions = [
     { name: 'queue', alias: 'q', description: 'Source SQS Queue name or URL', group: 'main' },
     { name: 'region', alias: 'r', defaultValue: 'us-east-1', description: 'AWS region name', group: 'main' },
     { name: 'body', alias: 'b', type: RegExp, group: 'main', description: 'Optional regular expression pattern to match the message body' },
+    { name: 'all', type: Boolean, group: 'main', description: 'Matches all messages in the queue (do not filter anything). Setting this flag overrides {bold --body} and {bold --attribute}' },
     { name: 'attribute', alias: 'a', group: 'main', multiple: true, type: parseAttribute, typeLabel: '{underline attr}={underline regexp}', description: 'Matches a message attribute\nYou can set this option multiple times to match multiple attributes' },
     { name: 'delete', type: Boolean, group: 'main', description: 'Delete matched messages from the queue (use with caution)' },
     { name: 'moveTo', group: 'main', description: 'Move matched messages to the given destination queue name or URL' },
     { name: 'copyTo', group: 'main', description: 'Copy matched messages to the given destination queue name or URL' },
     { name: 'publishTo', typeLabel: '{underline topic ARN}', group: 'main', description: 'Publish matched messages to the given destination SNS topic' },
     { name: 'republish', type: Boolean, group: 'main', description: 'Republish messages that originated from SNS back to their topic of origin.\nThis option is typically used together with the {bold --delete} option to re-process "dead-letter queues" from an SNS topic.\nMessages which are not originated from SNS will be ignored.' },
-    { name: 'all', type: Boolean, group: 'main', description: 'Matches all messages in the queue (do not filter anything). Setting this flag overrides {bold --body} and {bold --attribute}' },
+    { name: 'redrive', type: Boolean, group: 'main', description: 'Move matched messages from a dead-letter queue (DLQ) back into its original queue, based on the RedrivePolicy configuration. Only works if the DLQ has a single source queue configured via RedrivePolicy. This has the same effect as setting {bold --moveTo}, but automatically detects the original queue to move messages to.' },
     // Credentials
     { name: 'inputCredentials', alias: 'i', type: Boolean, description: 'Input the AWS access key id and secret access key via {underline stdin}', group: 'credentials' },
     { name: 'accessKeyId', description: 'AWS access key id ({bold not recommended:} use "aws configure" or "--inputCredentials" instead)', group: 'credentials' },
@@ -158,6 +159,9 @@ function validateOptions(options, log) {
     }
     if (options.copyTo && options.delete) {
         return error(chalk`{red ERROR: You can't specify both {bold --copyTo} and {bold --delete}! Use {bold --moveTo} instead}`);
+    }
+    if (options.moveTo && options.redrive) {
+        return error(chalk`{red ERROR: You can't specify both {bold --moveTo} and {bold --redrive}!}`);
     }
     if (!(options.parallel > 0)) {
         return error(chalk`{red ERROR: Invalid {bold --parallel} value (must be greater than 0)}`);

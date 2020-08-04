@@ -122,7 +122,7 @@ which is also problematic for large queues.
 ```
 $ sqs-grep --help
 
-sqs-grep version 1.13.0
+sqs-grep version 1.14.0
 
 sqs-grep
 
@@ -134,6 +134,8 @@ Main options
   -q, --queue string            Source SQS Queue name or URL                                                  
   -r, --region string           AWS region name                                                               
   -b, --body regexp             Optional regular expression pattern to match the message body                 
+  --all                         Matches all messages in the queue (do not filter anything). Setting this flag 
+                                overrides --body and --attribute                                              
   -a, --attribute attr=regexp   Matches a message attribute                                                   
                                 You can set this option multiple times to match multiple attributes           
   --delete                      Delete matched messages from the queue (use with caution)                     
@@ -144,8 +146,11 @@ Main options
                                 This option is typically used together with the --delete option to re-process 
                                 "dead-letter queues" from an SNS topic.                                       
                                 Messages which are not originated from SNS will be ignored.                   
-  --all                         Matches all messages in the queue (do not filter anything). Setting this flag 
-                                overrides --body and --attribute                                              
+  --redrive                     Move matched messages from a dead-letter queue (DLQ) back into its original   
+                                queue, based on the RedrivePolicy configuration. Only works if the DLQ has a  
+                                single source queue configured via RedrivePolicy. This has the same effect as 
+                                setting --moveTo, but automatically detects the original queue to move        
+                                messages to.                                                                  
 
 Credential options
 

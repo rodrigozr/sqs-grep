@@ -30,7 +30,7 @@ describe('Integration Tests', function () {
                 /* ignore */
             }
             // Start the docker container
-            await exec(`docker run -d --name ${containerName} -p 4575-4576:4575-4576 -e SERVICES=sqs,sns localstack/localstack`);
+            await exec(`docker run -d --name ${containerName} -p 4575-4576:4575-4576 -e SERVICES=sqs,sns localstack/localstack-light:0.11.3`);
             // Create a custom SQS connector
             let options = parseOptions(['--endpointUrl', 'http://localhost:4576']);
             sqs = new AWS.SQS({
@@ -80,11 +80,23 @@ describe('Integration Tests', function () {
             /* ignore */
         }
     });
-    let queueUrl1, queueUrl2, queueUrl3;
+    let queueUrl1, queueUrl2, queueUrl3, queueAttributes1;
     beforeEach(async function() {
         queueUrl1 = (await sqs.createQueue({QueueName: 'Queue1'}).promise()).QueueUrl;
+        queueAttributes1 = await sqs.getQueueAttributes({
+            QueueUrl: queueUrl1,
+            AttributeNames: ['All']
+        }).promise();
         queueUrl2 = (await sqs.createQueue({QueueName: 'Queue2'}).promise()).QueueUrl;
-        queueUrl3 = (await sqs.createQueue({QueueName: 'Queue3'}).promise()).QueueUrl;
+        queueUrl3 = (await sqs.createQueue({
+            QueueName: 'Queue3',
+            Attributes: {
+                RedrivePolicy: JSON.stringify({
+                    maxReceiveCount: 10,
+                    deadLetterTargetArn: queueAttributes1.Attributes.QueueArn
+                })
+            }
+        }).promise()).QueueUrl;
 
         await sqs.sendMessage({QueueUrl: queueUrl1, MessageBody: 'message 1'}).promise();
         await sqs.sendMessage({QueueUrl: queueUrl1, MessageBody: 'message 2 - test'}).promise();
@@ -193,6 +205,38 @@ describe('Integration Tests', function () {
         assert.equal(await getQueueAttribute(queueUrl3, 'ApproximateNumberOfMessages'), 2);
         assert.equal(await getQueueAttribute(queueUrl1, 'ApproximateNumberOfMessages'), 0);
         assert.equal(await getQueueAttribute(queueUrl1, 'ApproximateNumberOfMessagesNotVisible'), 2);
+    });
+    it('should redrive the queue', async function () {
+        // act
+        const {qtyScanned, qtyMatched} = await new SqsGrep(parse(['--queue=Queue1', '--redrive', '--body=test'])).run();
+        
+        // assert
+        assert.equal(qtyScanned, 4);
+        assert.equal(qtyMatched, 2);
+        assert.equal(await getQueueAttribute(queueUrl3, 'ApproximateNumberOfMessages'), 2);
+        assert.equal(await getQueueAttribute(queueUrl1, 'ApproximateNumberOfMessages'), 0);
+        assert.equal(await getQueueAttribute(queueUrl1, 'ApproximateNumberOfMessagesNotVisible'), 2);
+    });
+    it('should fail redrive when there are no source queues', async function () {
+        // act, assert
+        await assert.rejects(() => new SqsGrep(parse(['--queue=Queue2', '--redrive', '--all'])).run(),
+            err => err.message.includes('ERROR - Could not find source queue for dead-letter'));
+    });
+    it('should fail redrive when there are multiple source queues', async function () {
+        // arrange
+        await sqs.createQueue({
+            QueueName: 'Queue4',
+            Attributes: {
+                RedrivePolicy: JSON.stringify({
+                    maxReceiveCount: 10,
+                    deadLetterTargetArn: queueAttributes1.Attributes.QueueArn
+                })
+            }
+        }).promise();
+
+        // act, assert
+        await assert.rejects(() => new SqsGrep(parse(['--queue=Queue1', '--redrive', '--all'])).run(),
+            err => err.message.includes('ERROR - Found a total of 2 source queues for dead-letter'));
     });
     it('should support queue URLs', async function () {
         // act

@@ -198,6 +198,29 @@ class SqsGrep {
     }
 
     /**
+     * Finds the URL of the source queue for a given DLQ
+     * @param {String} dlqUrl URL of the DLQ
+     */
+    async _findDlqSourceQueue(dlqUrl) {
+        this.log(chalk`Finding the dead-letter source queue of '{green ${dlqUrl}}' ...`);
+        const res = await this.sqs.listDeadLetterSourceQueues({
+            QueueUrl: dlqUrl,
+            MaxResults: 1000,
+        }).promise();
+        const urls = res.queueUrls || [];
+        if (urls.length !== 1) {
+            const msg = urls.length === 0
+                ? `ERROR - Could not find source queue for dead-letter ${dlqUrl}`
+                : `ERROR - Found a total of ${urls.length} source queues for dead-letter ${dlqUrl} but --redrive supports only exactly one source queue`;
+            this.log(chalk`{bold {red ${msg}}}`);
+            throw new Error(msg);
+        }
+        const queueUrl = urls[0];
+        this.log(chalk`Found dead-letter source: '{green ${queueUrl}}' ...`);
+        return queueUrl;
+    }
+
+    /**
      * Connects to all required SQS queues by retrieving their URL
      */
     async _connectToQueues() {
@@ -205,6 +228,9 @@ class SqsGrep {
             this.inputFileReader = new lineByLine(this.options.inputFile);
         } else {
             this.options.sourceQueueUrl = await this._connectToQueue(this.options.queue);
+        }
+        if (this.options.redrive) {
+            this.options.moveTo = await this._findDlqSourceQueue(this.options.sourceQueueUrl);
         }
         if (this.options.moveTo) {
             this.options.moveToQueueUrl = await this._connectToQueue(this.options.moveTo);

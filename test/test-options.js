@@ -57,6 +57,11 @@ describe('Options', function () {
             assert.equal(validateOptions(options, log), false);
             assert.equal(hasLog(/ERROR: You can't specify both .*--copyTo.* and .*--delete.*/), true);
         });
+        it('should not allow both --moveTo and --redrive', function () {
+            const options = parseOptions(['--queue', 'TestQueue', '--all', '--moveTo=A', '--redrive']);
+            assert.equal(validateOptions(options, log), false);
+            assert.equal(hasLog(/ERROR: You can't specify both .*--moveTo.* and .*--redrive.*/), true);
+        });
         it('should not allow missing --parallel', function () {
             const options = parseOptions(['--queue', 'TestQueue', '--all']);
             options.parallel = undefined;

@@ -22,6 +22,7 @@ describe('SqsGrep', function () {
             sendMessage: sinon.stub(),
             deleteMessage: sinon.stub(),
             receiveMessage: sinon.stub(),
+            listDeadLetterSourceQueues: sinon.stub(),
         };
         sqs.getQueueUrl.returns({
             promise: () => Promise.resolve({QueueUrl: 'fake://url'})
@@ -812,6 +813,68 @@ describe('SqsGrep', function () {
             assert.equal(sqs.deleteMessage.callCount, 2);
             assert.equal(res.qtyScanned, 2);
             assert.equal(res.qtyMatched, 2);
+        });
+
+        it('should redrive messages', async function () {
+            // arrange
+            const options = parse(['--queue=A', '--all', '--redrive']);
+            const sqsGrep = new SqsGrep(options);
+            sqs.listDeadLetterSourceQueues.onFirstCall().returns({
+                promise: () => Promise.resolve({queueUrls: [
+                    'fake://queueA'
+                ]})
+            });
+            sqs.receiveMessage.onFirstCall().returns({
+                promise: () => Promise.resolve({Messages: [
+                    {Body: '1'},
+                    {Body: '2'},
+                ]})
+            });
+            [1,2,3,4,5,6].forEach(call => {
+                sqs.receiveMessage.onCall(call).returns({
+                    promise: () => Promise.resolve({Messages: []})
+                });
+            });
+            
+            // act
+            const res = await sqsGrep.run();
+
+            // assert
+            assert.equal(sqs.getQueueUrl.callCount, 1);
+            assert.equal(sqs.sendMessage.callCount, 2);
+            assert.equal(sqs.deleteMessage.callCount, 2);
+            assert.equal(res.qtyScanned, 2);
+            assert.equal(res.qtyMatched, 2);
+        });
+
+        it('should fail redrive without a source queue', async function () {
+            // arrange
+            const options = parse(['--queue=A', '--all', '--redrive']);
+            const sqsGrep = new SqsGrep(options);
+            sqs.listDeadLetterSourceQueues.onFirstCall().returns({
+                promise: () => Promise.resolve({})
+            });
+            
+            // act, assert
+            await assert.rejects(() => sqsGrep.run(),
+                err => err.message.includes('ERROR - Could not find source queue for dead-letter'));
+        });
+
+        it('should fail redrive with multiple source queues', async function () {
+            // arrange
+            const options = parse(['--queue=A', '--all', '--redrive']);
+            const sqsGrep = new SqsGrep(options);
+            sqs.listDeadLetterSourceQueues.onFirstCall().returns({
+                promise: () => Promise.resolve({queueUrls: [
+                    'fake://queueB',
+                    'fake://queueC',
+                    'fake://queueD',
+                ]})
+            });
+            
+            // act, assert
+            await assert.rejects(() => sqsGrep.run(),
+                err => err.message.includes('ERROR - Found a total of 3 source queues for dead-letter'));
         });
 
         it('should write messages to file', async function () {
