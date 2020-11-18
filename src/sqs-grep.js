@@ -332,7 +332,7 @@ class SqsGrep {
                 await this.sns.publish({
                     TopicArn: options.publishTo,
                     Message: this._getBodyToPublish(message),
-                    MessageAttributes: options.stripAttributes ? null : message.MessageAttributes,
+                    MessageAttributes: options.stripAttributes ? null : this._getMessageAttributesToPublish(message),
                 }).promise();
             }
             // Republish message to it's topic of origin
@@ -340,10 +340,11 @@ class SqsGrep {
                 try {
                     const notification = JSON.parse(message.Body);
                     if (notification.Type === 'Notification' && notification.Message && notification.TopicArn) {
+                        const messageAttributes = notification.MessageAttributes;
                         await this.sns.publish({
                             TopicArn: notification.TopicArn,
                             Message: notification.Message,
-                            MessageAttributes: options.stripAttributes ? null : message.MessageAttributes,
+                            MessageAttributes: options.stripAttributes ? null : this._getSnsMessageAttributeFromSqs(messageAttributes),
                         }).promise();
                     }
                 } catch (err) {
@@ -400,6 +401,42 @@ class SqsGrep {
             // ignore
         }
         return body;
+    }
+
+    /**
+     * Gets the message attributes to publish on SNS, given an SQS message
+     * @param {*} message SQS message
+     */
+    _getMessageAttributesToPublish(message) {
+        let messageAttributes = message.MessageAttributes;
+        try {
+            const notification = JSON.parse(message.Body);
+            if (notification.Type === 'Notification' && notification.MessageAttributes) {
+                messageAttributes = this._getSnsMessageAttributeFromSqs(notification.MessageAttributes);
+            }
+        } catch (ex) {
+
+        }
+        return messageAttributes;
+    }
+
+    /**
+     * Gets SNS message attributes given SQS message attributes
+     * @param {*} sqsMessageAttribute SQS message attributes
+     */
+    _getSnsMessageAttributeFromSqs(sqsMessageAttribute) {
+        if (!sqsMessageAttribute) {
+            return null;
+        }
+        let messageAttributes = {};
+        for (let attributeEntry in sqsMessageAttribute) {
+            const { Type, Value } = sqsMessageAttribute[attributeEntry];
+            messageAttributes[attributeEntry] = {
+                'DataType': Type,
+                'StringValue': Value
+            };
+        }
+        return messageAttributes;
     }
 
     /**
