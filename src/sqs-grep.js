@@ -415,7 +415,7 @@ class SqsGrep {
                 messageAttributes = this._getSnsMessageAttributeFromSqs(notification.MessageAttributes);
             }
         } catch (ex) {
-
+            // ignore
         }
         return messageAttributes;
     }
