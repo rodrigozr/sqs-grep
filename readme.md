@@ -23,6 +23,7 @@ It can also delete the matching messages, copy/move them to another SQS queue an
 * Parallel scan for higher throughput
 * Cross-platform, with pre-built binaries for Linux, MacOS and Windows
 * Supports FIFO queues for both sources and targets
+* [Custom processing scripts](user-scripts.md)
 
 # Usage examples
 Find messages containing the text 'Error' in the body:
@@ -122,7 +123,7 @@ which is also problematic for large queues.
 ```
 $ sqs-grep --help
 
-sqs-grep version 1.14.0
+sqs-grep version 1.15.0
 
 sqs-grep
 
@@ -181,6 +182,8 @@ Other options
                                which can be later used with --inputFile                                      
   --inputFile file             Reads messages from a local file (generated using --outputFile) instead of    
                                from input queue                                                              
+  --scriptFile file.js         Uses a custom user-script to process messages. See                            
+                               https://github.com/rodrigozr/sqs-grep/blob/master/user-scripts.md             
   -e, --emptyReceives number   Consider the queue fully scanned after this number of consecutive "empty      
                                receives" (default: 5)                                                        
   -w, --wait seconds           Number of seconds to wait after each "empty receive" (default: 0 - do not     
@@ -216,3 +219,8 @@ Usage examples
   $ sqs-grep --inputFile messages.txt --all --copyTo TargetQueue                
 
 ```
+
+# Custom script files
+`sqs-grep` supports custom message processing by providing a script file with the `--scriptFile` option.
+
+See [user-scripts.md](user-scripts.md) for additional documentation on that feature.

@@ -1,5 +1,6 @@
 const fs = require('fs');
 const os = require('os');
+const path = require('path');
 const chalk = require('chalk');
 const AWS = require('aws-sdk');
 const lineByLine = require('n-readlines');
@@ -36,6 +37,7 @@ class SqsGrep {
         this.qtyScanned = 0;
         this.qtyMatched = 0;
         this._configureThrottling();
+        this.userScript = this._loadUserScript();
     }
 
     /**
@@ -79,8 +81,10 @@ class SqsGrep {
                     }
                     // Process received messages
                     for (let message of res.Messages) {
+                        await this.userScript.preProcessMessage(message);
                         if (this._isMessageMatched(message)) {
                             this.qtyMatched++;
+                            await this.userScript.preProcessMatchedMessage(message);
                             await this._processMatchedSqsMessage(message);
                             if (!keepRunning()) {
                                 break;
@@ -126,6 +130,35 @@ class SqsGrep {
                 this._processMatchedSqsMessage = this.rate_limiter.wrap(this._processMatchedSqsMessage);
             }
         }
+    }
+
+    /**
+     * Loads a custom user script, when --scriptFile is defined
+     * @returns object with custom hooks (or default empty hooks)
+     */
+    _loadUserScript() {
+        // Default to all empty hooks, when they are not defined
+        const emptyHook = () => undefined;
+        let hooks = {
+            preProcessMessage: emptyHook,
+            preProcessMatchedMessage: emptyHook,
+        };
+        if (this.options.scriptFile) {
+            // This is just a trick to avoid 'pkg' complaining about dynamic requires
+            const localRequire = require;
+            const scriptFile = path.resolve(this.options.scriptFile);
+            this.log(chalk`Loading user-provided script file '{green ${scriptFile}}' ...`);
+            const scriptModule = localRequire(path.resolve(this.options.scriptFile));
+            hooks = { ...hooks, ...scriptModule };
+        }
+        // Bind all hooks to this instance so they can do things like this.log('message')
+        for (const key in hooks) {
+            const element = hooks[key];
+            if (typeof(element) === 'function') {
+                hooks[key] = element.bind(this);
+            }
+        }
+        return hooks;
     }
 
     /**

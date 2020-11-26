@@ -1045,5 +1045,85 @@ describe('SqsGrep', function () {
             // assert
             assert(awsOptions.logger.log === console.log);
         });
+
+        it('should call preProcessMessage user-script hook', async function () {
+            // arrange
+            const scriptFile = '/tmp/sqs-grep-test-script-1.js';
+            const options = parse(['--queue=A', '--all', '--moveTo=B', '--scriptFile', scriptFile]);
+            sqs.receiveMessage.onFirstCall().returns({
+                promise: () => Promise.resolve({Messages: [
+                    {Body: '1'},
+                    {Body: '2'},
+                ]})
+            });
+            [1,2,3,4,5,6].forEach(call => {
+                sqs.receiveMessage.onCall(call).returns({
+                    promise: () => Promise.resolve({Messages: []})
+                });
+            });
+            fs.writeFileSync(scriptFile, `
+                module.exports = {
+                    preProcessMessage(message) {
+                        message.Body = String(Number(message.Body) + 10);
+                    }
+                }
+            `);
+            const sqsGrep = new SqsGrep(options);
+            fs.unlinkSync(scriptFile);
+            
+            // act
+            const res = await sqsGrep.run();
+
+            // assert
+            assert.equal(sqs.getQueueUrl.callCount, 2);
+            assert.equal(sqs.sendMessage.callCount, 2);
+            sinon.assert.calledWith(sqs.sendMessage.firstCall, sinon.match.has('MessageBody', '11'));
+            sinon.assert.calledWith(sqs.sendMessage.secondCall, sinon.match.has('MessageBody', '12'));
+            assert.equal(sqs.deleteMessage.callCount, 2);
+            assert.equal(res.qtyScanned, 2);
+            assert.equal(res.qtyMatched, 2);
+        });
+
+        it('should call preProcessMatchedMessage user-script hook', async function () {
+            // arrange
+            const scriptFile = '/tmp/sqs-grep-test-script-2.js';
+            const options = parse(['--queue=A', '--all', '--moveTo=B', '--scriptFile', scriptFile]);
+            sqs.receiveMessage.onFirstCall().returns({
+                promise: () => Promise.resolve({Messages: [
+                    {Body: '1'},
+                    {Body: '2'},
+                ]})
+            });
+            [1,2,3,4,5,6].forEach(call => {
+                sqs.receiveMessage.onCall(call).returns({
+                    promise: () => Promise.resolve({Messages: []})
+                });
+            });
+            fs.writeFileSync(scriptFile, `
+                module.exports = {
+                    async preProcessMessage(message) {
+                        message.Body = String(Number(message.Body) + 10);
+                    },
+                    async preProcessMatchedMessage(message) {
+                        message.Body = String(Number(message.Body) + 10);
+                    },
+                    thisNonFunctionShouldBeIgnored: true
+                }
+            `);
+            const sqsGrep = new SqsGrep(options);
+            fs.unlinkSync(scriptFile);
+            
+            // act
+            const res = await sqsGrep.run();
+
+            // assert
+            assert.equal(sqs.getQueueUrl.callCount, 2);
+            assert.equal(sqs.sendMessage.callCount, 2);
+            sinon.assert.calledWith(sqs.sendMessage.firstCall, sinon.match.has('MessageBody', '21'));
+            sinon.assert.calledWith(sqs.sendMessage.secondCall, sinon.match.has('MessageBody', '22'));
+            assert.equal(sqs.deleteMessage.callCount, 2);
+            assert.equal(res.qtyScanned, 2);
+            assert.equal(res.qtyMatched, 2);
+        });
     });
 });

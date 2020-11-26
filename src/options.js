@@ -43,6 +43,7 @@ const optionDefinitions = [
     { name: 'stripAttributes', type: Boolean, defaultValue: false, description: 'This option will cause all message attributes to be stripped when moving, copying and publishing the message (used with {bold --moveTo}, {bold --copyTo}, {bold --publishTo}, and {bold --republish})' },
     { name: 'outputFile', alias: 'o', typeLabel: '{underline file}', description: 'Write matched messages to the given output file instead of the console. Using this option automatically sets {bold --full} to have exact message reproduction, which can be later used with {bold --inputFile}' },
     { name: 'inputFile', typeLabel: '{underline file}', description: 'Reads messages from a local file (generated using {bold --outputFile}) instead of from input queue' },
+    { name: 'scriptFile', typeLabel: '{underline file.js}', description: 'Uses a custom user-script to process messages. See https://github.com/rodrigozr/sqs-grep/blob/master/user-scripts.md' },
     { name: 'emptyReceives', alias: 'e', type: Number, defaultValue: 5, description: 'Consider the queue fully scanned after this number of consecutive "empty receives" (default: 5)' },
     { name: 'wait', alias: 'w', type: Number, typeLabel: '{underline seconds}', defaultValue: 0, description: 'Number of seconds to wait after each "empty receive" (default: 0 - do not wait)' },
     { name: 'endpointUrl', typeLabel: '{underline URL}', description: 'Use a custom AWS endpoint URL' },
