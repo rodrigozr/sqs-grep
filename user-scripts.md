@@ -1,7 +1,7 @@
 # Using custom user-provided scripts with `sqs-grep`
 `sqs-grep` supports custom message processing by providing a script file with the `--scriptFile` option.
 
-Script files are **NodeJS modules**, written in JavaScript, and they will be directly loaded by sqs-grep.
+Script files are [NodeJS modules](https://www.w3schools.com/nodejs/nodejs_modules.asp), written in JavaScript, and they will be directly loaded by sqs-grep.
 This means that you should **NEVER** use scripts from unknown sources, since those scripts will have
 full access to your computer.
 
@@ -74,7 +74,7 @@ const { ungzip } = sqs_grep_require('node-gzip');
 
 module.exports = {
     async preProcessMessage(message) {
-        message.OriginalBody = Body;
+        message.OriginalBody = message.Body;
         const body = await ungzip(Buffer.from(message.Body, 'base64'));
         message.Body = body.toString('utf-8');
     },
