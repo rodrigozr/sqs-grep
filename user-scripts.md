@@ -1,4 +1,4 @@
-# Using custom user-provided scripts with  AWS SQS grep 
+# Using custom user-provided scripts with `sqs-grep`
 `sqs-grep` supports custom message processing by providing a script file with the `--scriptFile` option.
 
 Script files are **NodeJS modules**, written in JavaScript, and they will be directly loaded by sqs-grep.
@@ -36,12 +36,14 @@ module.exports = {
 };
 ```
 
-All hooks will be bound to the `SqsGrep` instance which is currently running, so hooks have access to all objects exposed by SqsGrep, such as:
+All hooks will be bound to the [SqsGrep](https://github.com/rodrigozr/sqs-grep/blob/master/src/sqs-grep.js) class instance which is currently running, so hooks have access to all objects exposed by SqsGrep, such as:
 * `options` - object containing all execution options
 * `log(message)` - function which logs something to the console, respecting the --silent command-line preference
 
+All hooks can also be defined as an **async function** or a function which returns a Promise and sqs-grep will properly handle them using `await`.
+
 # NodeJS `require()` support
-User scripts are free to `require()` standard NodeJS modules normally.
+User scripts are free to `require()` standard NodeJS modules normally, including local npm modules declared in an optional `package.json` file in the same directory of your script.
 
 User scripts can also call `sqs_grep_require()` to load custom modules included in sqs-grep
 [package.json](https://github.com/rodrigozr/sqs-grep/blob/master/package.json), under the `dependencies` section.
@@ -83,3 +85,29 @@ module.exports = {
 };
 ```
 Then you can use it like this: `sqs-grep -q Queue --body Error --moveTo OtherQueue --scriptFile script.js`
+
+# Sample use-case: Including new npm modules
+Imagine that you want to use the `Moment.js` library in your custom script. You can do that by declaring your script as a full-blown NodeJS module:
+
+```sh
+mkdir my-script
+cd my-script
+npm init --yes
+npm install moment
+echo "const moment = require('moment');" > index.js
+cd ..
+```
+Then you can edit `index.js` to use the new module:
+
+```js
+const moment = require('moment');
+module.exports = {
+    preProcessMessage(message) {
+        const body = JSON.parse(message.Body);
+        body.MyDateField = moment(body.MyDateField).startOf('week').toISOString();
+        message.Body = JSON.stringify(body);
+    },
+};
+```
+
+And you can run it like this: `sqs-grep -q Queue --all --moveTo OtherQueue --scriptFile my-script/index.js`
