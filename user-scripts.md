@@ -41,7 +41,9 @@ All hooks will be bound to the `SqsGrep` instance which is currently running, so
 * `log(message)` - function which logs something to the console, respecting the --silent command-line preference
 
 # NodeJS `require()` support
-User scripts are free to `require()` standard NodeJS modules and custom modules included in sqs-grep
+User scripts are free to `require()` standard NodeJS modules normally.
+
+User scripts can also call `sqs_grep_require()` to load custom modules included in sqs-grep
 [package.json](https://github.com/rodrigozr/sqs-grep/blob/master/package.json), under the `dependencies` section.
 
 # Sample use-case: Decode a GZipped Base64 body
@@ -50,7 +52,7 @@ You can use a custom script like this:
 
 ```js
 const { Buffer } = require('buffer');
-const { ungzip } = require('node-gzip');
+const { ungzip } = sqs_grep_require('node-gzip');
 
 module.exports = {
     async preProcessMessage(message) {
@@ -66,7 +68,7 @@ Now, imagine that you only want to decode the message for filtering them, but yo
 
 ```js
 const { Buffer } = require('buffer');
-const { ungzip } = require('node-gzip');
+const { ungzip } = sqs_grep_require('node-gzip');
 
 module.exports = {
     async preProcessMessage(message) {

@@ -1125,5 +1125,43 @@ describe('SqsGrep', function () {
             assert.equal(res.qtyScanned, 2);
             assert.equal(res.qtyMatched, 2);
         });
+
+        it('should expose sqs_grep_require to user-script hooks', async function () {
+            // arrange
+            const scriptFile = '/tmp/sqs-grep-test-script-3.js';
+            const options = parse(['--queue=A', '--all', '--moveTo=B', '--scriptFile', scriptFile]);
+            sqs.receiveMessage.onFirstCall().returns({
+                promise: () => Promise.resolve({Messages: [
+                    {Body: '1'},
+                    {Body: '2'},
+                ]})
+            });
+            [1,2,3,4,5,6].forEach(call => {
+                sqs.receiveMessage.onCall(call).returns({
+                    promise: () => Promise.resolve({Messages: []})
+                });
+            });
+            fs.writeFileSync(scriptFile, `
+                const { ungzip } = sqs_grep_require('node-gzip');
+                module.exports = {
+                    async preProcessMessage(message) {
+                        message.Body = ungzip.name;
+                    }
+                }
+            `);
+            const sqsGrep = new SqsGrep(options);
+            fs.unlinkSync(scriptFile);
+            
+            // act
+            const res = await sqsGrep.run();
+
+            // assert
+            assert.equal(sqs.getQueueUrl.callCount, 2);
+            assert.equal(sqs.sendMessage.callCount, 2);
+            sinon.assert.calledWith(sqs.sendMessage.firstCall, sinon.match.has('MessageBody', 'ungzip'));
+            assert.equal(sqs.deleteMessage.callCount, 2);
+            assert.equal(res.qtyScanned, 2);
+            assert.equal(res.qtyMatched, 2);
+        });
     });
 });

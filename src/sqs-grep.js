@@ -5,6 +5,7 @@ const chalk = require('chalk');
 const AWS = require('aws-sdk');
 const lineByLine = require('n-readlines');
 const Bottleneck = require('bottleneck');
+require('node-gzip');
 const { validateOptions, printMatchingRules, parseOptions } = require('./options');
 
 /**
@@ -146,6 +147,14 @@ class SqsGrep {
         if (this.options.scriptFile) {
             // This is just a trick to avoid 'pkg' complaining about dynamic requires
             const localRequire = require;
+            const localResolve = require.resolve;
+
+            // This function will require modules using the main entry point paths
+            // which allows things like sqs_grep_require('node-gzip') in scripts
+            global.sqs_grep_require = function (id) {
+                return localRequire(localResolve(id, { paths: require.main.paths }));
+            };
+
             const scriptFile = path.resolve(this.options.scriptFile);
             this.log(chalk`Loading user-provided script file '{green ${scriptFile}}' ...`);
             const scriptModule = localRequire(path.resolve(this.options.scriptFile));
