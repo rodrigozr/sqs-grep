@@ -42,7 +42,7 @@
   "author": "Rodrigo Rosauro",
   "license": "MIT",
   "dependencies": {
-    "aws-sdk": "^2.799.0",
+    "aws-sdk": "^2.814.0",
     "bottleneck": "^2.19.5",
     "chalk": "^2.4.2",
     "command-line-args": "^5.1.1",
