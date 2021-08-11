@@ -113,11 +113,21 @@ processing with a proper warning message.
 ## Why doesn't sqs-grep immediatelly makes the messages visible again after completing the execution?
 Good question! The AWS SQS console does that, for example, so why don't we do the same?
 
-The fact is that sqs-grep was designed to process arbitratly large SQS queues, and that would require
+The fact is that sqs-grep was designed to process arbitrarily large SQS queues, and that would require
 storing receipt handles in memory to then later make the messages visible again. For large queues, this
 is simply not feasible, as we would need several GB of RAM just for that. Also, making the messages
 visible again is a billed API call, and it would take some time to execute after the scan is completed,
 which is also problematic for large queues.
+
+# Limitations
+
+All standard [SQS Quotas](https://docs.aws.amazon.com/AWSSimpleQueueService/latest/SQSDeveloperGuide/quotas-queues.html) apply to any SQS client, including `sqs-grep`. The most important quota you should be aware of is the `"Messages per queue (in flight)"` limit of 120,000 messages for standard queues and 20,000 messages for FIFO queues.
+
+This means that, when scanning for messages without moving or deleting them, you can easily reach this quota on large queues, and the scanning will stop after the quota is reached.
+
+If you really need to scan more messages than the allowed "in-flight quota", you will need to use `--moveTo` to move the messages to a temporary queue, and then move them back to the original queue after you complete your search. You can also simply delete messages with the `--delete` flag if that is an option for you.
+
+If you don't specify `--moveTo` nor `--delete`, and your source queue is larger than the allowed quota, sqs-grep will stop scanning once it reaches the SQS limit.
 
 # Options
 ```
