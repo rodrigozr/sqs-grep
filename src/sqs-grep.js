@@ -186,6 +186,9 @@ class SqsGrep {
         if (options.secretAccessKey) {
             opts.secretAccessKey = options.secretAccessKey;
         }
+        if (options.sessionToken) {
+            opts.sessionToken = options.sessionToken;
+        }
         if (options.endpointUrl) {
             opts.endpoint = new AWS.Endpoint(options.endpointUrl);
         }
