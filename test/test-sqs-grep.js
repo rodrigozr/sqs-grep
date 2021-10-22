@@ -107,6 +107,11 @@ describe('SqsGrep', function () {
             const opts = SqsGrep._getAwsOptions(options);
             assert.equal(opts.secretAccessKey, 'SECRET');
         });
+        it('should set the sessionToken', async function () {
+            const options = parse(['--sessionToken', 'TOKEN']);
+            const opts = SqsGrep._getAwsOptions(options);
+            assert.equal(opts.sessionToken, 'TOKEN');
+        });
         it('should set the endpointUrl', async function () {
             const options = parse(['--endpointUrl', 'http://localhost:5000']);
             const opts = SqsGrep._getAwsOptions(options);

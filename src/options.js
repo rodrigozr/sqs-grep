@@ -33,6 +33,7 @@ const optionDefinitions = [
     { name: 'inputCredentials', alias: 'i', type: Boolean, description: 'Input the AWS access key id and secret access key via {underline stdin}', group: 'credentials' },
     { name: 'accessKeyId', description: 'AWS access key id ({bold not recommended:} use "aws configure" or "--inputCredentials" instead)', group: 'credentials' },
     { name: 'secretAccessKey', description: 'AWS secret access key ({bold not recommended:} use "aws configure" or "--inputCredentials" instead)', group: 'credentials' },
+    { name: 'sessionToken', description: 'AWS session token', group: 'credentials' },
     // Other
     { name: 'negate', alias: 'n', type: Boolean, defaultValue: false, description: 'Negates the result of the pattern matching\n(I.e.: to find messages NOT containing a text)' },
     { name: 'timeout', alias: 't', type: Number, defaultValue: 60, typeLabel: '{underline seconds}', description: 'Timeout for the whole operation to complete.\nThe message visibility timeout will be calculated based on this value as well and the elapsed time to ensure that messages become visible again as soon as possible.' },
