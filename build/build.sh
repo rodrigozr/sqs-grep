@@ -1,7 +1,7 @@
 #!/bin/sh
 rm sqs-grep sqs-grep.exe sqs-grep-* > /dev/null 2> /dev/null
 echo Bulding executables...
-pkg ../ --public -t node16-linux-x64,node16-macos-x64,node16-win-x64 || exit 1
+pkg ../ --public -t node18-linux-x64,node18-macos-x64,node18-win-x64 || exit 1
 
 # Linux
 echo Packaging Linux x64 binary...
