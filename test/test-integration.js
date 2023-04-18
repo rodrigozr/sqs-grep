@@ -1,5 +1,6 @@
 /* eslint-disable no-undef */
-const AWS = require('aws-sdk');
+const { SNS } = require("@aws-sdk/client-sns");
+const { SQS } = require("@aws-sdk/client-sqs");
 const util = require('util');
 const exec = util.promisify(require('child_process').exec);
 const assert = require('assert');
@@ -10,8 +11,8 @@ const {SqsGrep} = require('../src/sqs-grep');
 const emptyLog = sinon.stub();
 
 describe('Integration Tests', function () {
-    let sqs = new AWS.SQS();
-    let sns = new AWS.SNS();
+    let sqs = new SQS();
+    let sns = new SNS();
     before(async function() {
         if (!process.env['RUN_INTEGRATION_TESTS']) {
             console.log('    Skipping integration tests because RUN_INTEGRATION_TESTS was not defined');
@@ -31,21 +32,19 @@ describe('Integration Tests', function () {
             }
             // Start the docker container
             await exec(`docker run -d --name ${containerName} -p 4575-4576:4575-4576 -e SERVICES=sqs,sns localstack/localstack-light:0.11.3`);
+            process.env['AWS_ACCESS_KEY_ID'] = 'test';
+            process.env['AWS_SECRET_ACCESS_KEY'] = 'test';
             // Create a custom SQS connector
             let options = parseOptions(['--endpointUrl', 'http://localhost:4576']);
-            sqs = new AWS.SQS({
+            sqs = new SQS({
                 region: options.region,
-                accessKeyId: 'FAKE',
-                secretAccessKey: 'FAKE',
-                endpoint:new AWS.Endpoint(options.endpointUrl)
+                endpoint: options.endpointUrl,
             });
             // Create a custom SNS connector
             options = parseOptions(['--endpointUrl', 'http://localhost:4575']);
-            sns = new AWS.SNS({
+            sns = new SNS({
                 region: options.region,
-                accessKeyId: 'FAKE',
-                secretAccessKey: 'FAKE',
-                endpoint:new AWS.Endpoint(options.endpointUrl)
+                endpoint: options.endpointUrl,
             });
             // Wait for it to be ready for a maximum of 5 minutes
             const deadline = new Date().getTime() + (5 * 60 * 1000);
@@ -54,8 +53,8 @@ describe('Integration Tests', function () {
                 if (stdout.split('\n').includes('Ready.')) {
                     // Ensure we can create a queue and list SNS topics
                     try {
-                        await sqs.createQueue({QueueName: 'ReadyTest'}).promise();
-                        await sns.listTopics({}).promise();
+                        await sqs.createQueue({QueueName: 'ReadyTest'});
+                        await sns.listTopics({});
                         // Success - the container is ready to be used!
                         return;
                     } catch (ex) {
@@ -82,12 +81,12 @@ describe('Integration Tests', function () {
     });
     let queueUrl1, queueUrl2, queueUrl3, queueAttributes1;
     beforeEach(async function() {
-        queueUrl1 = (await sqs.createQueue({QueueName: 'Queue1'}).promise()).QueueUrl;
+        queueUrl1 = (await sqs.createQueue({QueueName: 'Queue1'})).QueueUrl;
         queueAttributes1 = await sqs.getQueueAttributes({
             QueueUrl: queueUrl1,
             AttributeNames: ['All']
-        }).promise();
-        queueUrl2 = (await sqs.createQueue({QueueName: 'Queue2'}).promise()).QueueUrl;
+        });
+        queueUrl2 = (await sqs.createQueue({QueueName: 'Queue2'})).QueueUrl;
         queueUrl3 = (await sqs.createQueue({
             QueueName: 'Queue3',
             Attributes: {
@@ -96,24 +95,24 @@ describe('Integration Tests', function () {
                     deadLetterTargetArn: queueAttributes1.Attributes.QueueArn
                 })
             }
-        }).promise()).QueueUrl;
+        })).QueueUrl;
 
-        await sqs.sendMessage({QueueUrl: queueUrl1, MessageBody: 'message 1'}).promise();
-        await sqs.sendMessage({QueueUrl: queueUrl1, MessageBody: 'message 2 - test'}).promise();
-        await sqs.sendMessage({QueueUrl: queueUrl1, MessageBody: 'message 3'}).promise();
-        await sqs.sendMessage({QueueUrl: queueUrl1, MessageBody: 'message 4 - test'}).promise();
+        await sqs.sendMessage({QueueUrl: queueUrl1, MessageBody: 'message 1'});
+        await sqs.sendMessage({QueueUrl: queueUrl1, MessageBody: 'message 2 - test'});
+        await sqs.sendMessage({QueueUrl: queueUrl1, MessageBody: 'message 3'});
+        await sqs.sendMessage({QueueUrl: queueUrl1, MessageBody: 'message 4 - test'});
     });
     afterEach(async function() {
-        const queues = (await sqs.listQueues().promise()).QueueUrls;
+        const queues = (await sqs.listQueues({})).QueueUrls;
         for (const url of queues) {
-            await sqs.deleteQueue({QueueUrl: url}).promise();
+            await sqs.deleteQueue({QueueUrl: url});
         }
     });
     const getQueueAttribute = async (queueUrl, attribute) => {
         const queueAttributes = await sqs.getQueueAttributes({
             QueueUrl: queueUrl,
             AttributeNames: [attribute]
-        }).promise();
+        });
         return queueAttributes.Attributes[attribute];
     };
     const parse = args => ({
@@ -141,13 +140,13 @@ describe('Integration Tests', function () {
     });
     it('should publish the queue', async function () {
         // arrange
-        const topic = (await sns.createTopic({Name: 'MyTopic'}).promise()).TopicArn;
+        const topic = (await sns.createTopic({Name: 'MyTopic'})).TopicArn;
         const queueArn = await getQueueAttribute(queueUrl2, 'QueueArn');
         await sns.subscribe({
             Protocol: 'sqs',
             TopicArn: topic,
             Endpoint: queueArn,
-        }).promise();
+        });
         
         // act
         const {qtyScanned, qtyMatched} = await new SqsGrep(parse(['--queue=Queue1', '--publishTo', topic, '--body=test'])).run();
@@ -160,17 +159,17 @@ describe('Integration Tests', function () {
     });
     it('should re-publish messages to the original queue', async function () {
         // arrange
-        const topic = (await sns.createTopic({Name: 'MyTopicForRepublish'}).promise()).TopicArn;
+        const topic = (await sns.createTopic({Name: 'MyTopicForRepublish'})).TopicArn;
         const queueArn = await getQueueAttribute(queueUrl2, 'QueueArn');
         await sns.subscribe({
             Protocol: 'sqs',
             TopicArn: topic,
             Endpoint: queueArn,
-        }).promise();
+        });
         await sns.publish({
             TopicArn: topic,
             Message: "test publish",
-        }).promise();
+        });
         await new SqsGrep(parse(['--queue=Queue2', '--moveTo=Queue3', '--body=publish'])).run();
         
         // act
@@ -232,7 +231,7 @@ describe('Integration Tests', function () {
                     deadLetterTargetArn: queueAttributes1.Attributes.QueueArn
                 })
             }
-        }).promise();
+        });
 
         // act, assert
         await assert.rejects(() => new SqsGrep(parse(['--queue=Queue1', '--redrive', '--all'])).run(),
@@ -253,9 +252,11 @@ describe('Integration Tests', function () {
     it('should process from FIFO queue', async function () {
         // arrange
         const attr = {'FifoQueue': 'true', 'ContentBasedDeduplication':'true'};
-        const fifoQueueUrl = (await sqs.createQueue({QueueName: 'Queue.fifo', Attributes: attr}).promise()).QueueUrl;
-        await sqs.sendMessage({QueueUrl: fifoQueueUrl, MessageGroupId: '1', MessageBody: 'message 1'}).promise();
-        await sqs.sendMessage({QueueUrl: fifoQueueUrl, MessageGroupId: '1', MessageBody: 'message 2 - test'}).promise();
+        const fifoQueueUrl = (await sqs.createQueue({QueueName: 'Queue.fifo', Attributes: attr})).QueueUrl;
+        await sqs.sendMessage({QueueUrl: fifoQueueUrl, MessageGroupId: '1', MessageBody: 'message 1'});
+        await sqs.sendMessage(
+            {QueueUrl: fifoQueueUrl, MessageGroupId: '1', MessageBody: 'message 2 - test'}
+        );
 
         // act
         const {qtyScanned, qtyMatched} = await new SqsGrep(parse(['--queue=Queue.fifo', '--moveTo=Queue2', '--copyTo=Queue3', '--body=test'])).run();
@@ -271,7 +272,7 @@ describe('Integration Tests', function () {
     it('should process to FIFO queue', async function () {
         // arrange
         const attr = {'FifoQueue': 'true', 'ContentBasedDeduplication':'true'};
-        const fifoQueueUrl = (await sqs.createQueue({QueueName: 'Queue.fifo', Attributes: attr}).promise()).QueueUrl;
+        const fifoQueueUrl = (await sqs.createQueue({QueueName: 'Queue.fifo', Attributes: attr})).QueueUrl;
 
         // act
         const {qtyScanned, qtyMatched} = await new SqsGrep(parse(['--queue=Queue1', '--copyTo=Queue.fifo', '--body=test'])).run();

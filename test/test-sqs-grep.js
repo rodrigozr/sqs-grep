@@ -2,9 +2,10 @@
 const assert = require('assert');
 const sinon = require('sinon');
 const fs = require('fs');
-const AWS = require('aws-sdk');
-const {parseOptions} = require('../src/options');
-const {SqsGrep} = require('../src/sqs-grep');
+const { SNS } = require("@aws-sdk/client-sns");
+const { SQS } = require("@aws-sdk/client-sqs");
+const { parseOptions } = require('../src/options');
+const { SqsGrep } = require('../src/sqs-grep');
 
 const emptyLog = sinon.stub();
 
@@ -24,28 +25,16 @@ describe('SqsGrep', function () {
             receiveMessage: sinon.stub(),
             listDeadLetterSourceQueues: sinon.stub(),
         };
-        sqs.getQueueUrl.returns({
-            promise: () => Promise.resolve({QueueUrl: 'fake://url'})
-        });
-        sqs.getQueueAttributes.returns({
-            promise: () => Promise.resolve({Attributes: {ApproximateNumberOfMessages: 0}})
-        });
-        sqs.sendMessage.returns({
-            promise: () => Promise.resolve({})
-        });
-        sqs.deleteMessage.returns({
-            promise: () => Promise.resolve({})
-        });
+        sqs.getQueueUrl.returns(Promise.resolve({QueueUrl: 'fake://url'}));
+        sqs.getQueueAttributes.returns(Promise.resolve({Attributes: {ApproximateNumberOfMessages: 0}}));
+        sqs.sendMessage.returns(Promise.resolve({}));
+        sqs.deleteMessage.returns(Promise.resolve({}));
         sns = {
             getTopicAttributes: sinon.stub(),
             publish: sinon.stub(),
         };
-        sns.getTopicAttributes.returns({
-            promise: () => Promise.resolve({})
-        });
-        sns.publish.returns({
-            promise: () => Promise.resolve({})
-        });
+        sns.getTopicAttributes.returns(Promise.resolve({}));
+        sns.publish.returns(Promise.resolve({}));
     });
     afterEach(function() {
         sinon.restore();
@@ -66,27 +55,27 @@ describe('SqsGrep', function () {
             const sqsGrep = new SqsGrep(options);
             assert.equal(sqsGrep.log, console.log);
         });
-        it('should default sqs to AWS.SQS', async function () {
+        it('should default sqs to AWS SQS', async function () {
             const options = parse(['--help']);
             delete options.sqs;
             const sqsGrep = new SqsGrep(options);
-            assert.equal(sqsGrep.sqs instanceof AWS.SQS, true);
+            assert.equal(sqsGrep.sqs instanceof SQS, true);
         });
-        it('should default sns to AWS.SNS', async function () {
+        it('should default sns to AWS SNS', async function () {
             const options = parse(['--help']);
             delete options.sns;
             const sqsGrep = new SqsGrep(options);
-            assert.equal(sqsGrep.sns instanceof AWS.SNS, true);
+            assert.equal(sqsGrep.sns instanceof SNS, true);
         });
         it('should default all parameters', async function () {
             const sqsGrep = new SqsGrep({});
-            assert.equal(sqsGrep.sqs instanceof AWS.SQS, true);
+            assert.equal(sqsGrep.sqs instanceof SQS, true);
             assert.equal(sqsGrep.log, console.log);
             assert.equal(sqsGrep.options.parallel, 1);
         });
         it('should override default parameters', async function () {
             const sqsGrep = new SqsGrep({parallel: 2});
-            assert.equal(sqsGrep.sqs instanceof AWS.SQS, true);
+            assert.equal(sqsGrep.sqs instanceof SQS, true);
             assert.equal(sqsGrep.log, console.log);
             assert.equal(sqsGrep.options.parallel, 2);
         });
@@ -115,10 +104,7 @@ describe('SqsGrep', function () {
         it('should set the endpointUrl', async function () {
             const options = parse(['--endpointUrl', 'http://localhost:5000']);
             const opts = SqsGrep._getAwsOptions(options);
-            assert.equal(opts.endpoint.protocol, 'http:');
-            assert.equal(opts.endpoint.hostname, 'localhost');
-            assert.equal(opts.endpoint.port, 5000);
-            assert.equal(opts.endpoint.path, '/');
+            assert.equal(opts.endpoint, 'http://localhost:5000');
         });
     });
     describe('#run()', function () {
@@ -132,21 +118,15 @@ describe('SqsGrep', function () {
             // arrange
             const options = parse(['--queue=A', '--all']);
             const sqsGrep = new SqsGrep(options);
-            sqs.receiveMessage.onFirstCall().returns({
-                promise: () => Promise.resolve({Messages: [
-                    {Body: '1'},
-                    {Body: '2'},
-                ]})
-            });
-            sqs.receiveMessage.onSecondCall().returns({
-                promise: () => Promise.resolve({Messages: [
-                    {Body: '3'},
-                ]})
-            });
+            sqs.receiveMessage.onFirstCall().returns(Promise.resolve({Messages: [
+                {Body: '1'},
+                {Body: '2'},
+            ]}));
+            sqs.receiveMessage.onSecondCall().returns(Promise.resolve({Messages: [
+                {Body: '3'},
+            ]}));
             [2,3,4,5,6].forEach(call => {
-                sqs.receiveMessage.onCall(call).returns({
-                    promise: () => Promise.resolve({Messages: []})
-                });
+                sqs.receiveMessage.onCall(call).returns(Promise.resolve({Messages: []}));
             });
             
             // act
@@ -161,35 +141,23 @@ describe('SqsGrep', function () {
             // arrange
             const options = parse(['--queue=A', '--all']);
             const sqsGrep = new SqsGrep(options);
-            sqs.receiveMessage.onFirstCall().returns({
-                promise: () => Promise.resolve({Messages: [
-                    {Body: '1'},
-                ]})
-            });
+            sqs.receiveMessage.onFirstCall().returns(Promise.resolve({Messages: [
+                {Body: '1'},
+            ]}));
             [1,2,3,4].forEach(call => {
-                sqs.receiveMessage.onCall(call).returns({
-                    promise: () => Promise.resolve({Messages: []})
-                });
+                sqs.receiveMessage.onCall(call).returns(Promise.resolve({Messages: []}));
             });
-            sqs.receiveMessage.onCall(5).returns({
-                promise: () => Promise.resolve({Messages: [
-                    {Body: '2'},
-                ]})
-            });
+            sqs.receiveMessage.onCall(5).returns(Promise.resolve({Messages: [
+                {Body: '2'},
+            ]}));
             [6,7,8,9].forEach(call => {
-                sqs.receiveMessage.onCall(call).returns({
-                    promise: () => Promise.resolve({Messages: []})
-                });
+                sqs.receiveMessage.onCall(call).returns(Promise.resolve({Messages: []}));
             });
-            sqs.receiveMessage.onCall(10).returns({
-                promise: () => Promise.resolve({Messages: [
-                    {Body: '3'},
-                ]})
-            });
+            sqs.receiveMessage.onCall(10).returns(Promise.resolve({Messages: [
+                {Body: '3'},
+            ]}));
             [11,12,13,14,15].forEach(call => {
-                sqs.receiveMessage.onCall(call).returns({
-                    promise: () => Promise.resolve({Messages: []})
-                });
+                sqs.receiveMessage.onCall(call).returns(Promise.resolve({Messages: []}));
             });
             
             // act
@@ -206,9 +174,7 @@ describe('SqsGrep', function () {
             const options = parse(['--queue=A', '--all', '--wait=3', '--emptyReceives=3']);
             const sqsGrep = new SqsGrep(options);
             [0,1,2,3,4].forEach(call => {
-                sqs.receiveMessage.onCall(call).returns({
-                    promise: () => Promise.resolve({Messages: []})
-                });
+                sqs.receiveMessage.onCall(call).returns(Promise.resolve({Messages: []}));
             });
             const originalDelay = sqsGrep._delay;
             let delayCalled = 0;
@@ -260,21 +226,15 @@ describe('SqsGrep', function () {
             // arrange
             const options = parse(['--queue=A', '--body=2']);
             const sqsGrep = new SqsGrep(options);
-            sqs.receiveMessage.onFirstCall().returns({
-                promise: () => Promise.resolve({Messages: [
-                    {Body: '1'},
-                    {Body: '2'},
-                ]})
-            });
-            sqs.receiveMessage.onSecondCall().returns({
-                promise: () => Promise.resolve({Messages: [
-                    {Body: '3'},
-                ]})
-            });
+            sqs.receiveMessage.onFirstCall().returns(Promise.resolve({Messages: [
+                {Body: '1'},
+                {Body: '2'},
+            ]}));
+            sqs.receiveMessage.onSecondCall().returns(Promise.resolve({Messages: [
+                {Body: '3'},
+            ]}));
             [2,3,4,5,6].forEach(call => {
-                sqs.receiveMessage.onCall(call).returns({
-                    promise: () => Promise.resolve({Messages: []})
-                });
+                sqs.receiveMessage.onCall(call).returns(Promise.resolve({Messages: []}));
             });
             
             // act
@@ -289,21 +249,15 @@ describe('SqsGrep', function () {
             // arrange
             const options = parse(['--queue=A', '--attribute=key=val', '--silent']);
             const sqsGrep = new SqsGrep(options);
-            sqs.receiveMessage.onFirstCall().returns({
-                promise: () => Promise.resolve({Messages: [
-                    {Body: '1', MessageAttributes:{key: {StringValue: 'val'}}},
-                    {Body: '2', MessageAttributes:{key: {StringValue: 'nop'}}},
-                ]})
-            });
-            sqs.receiveMessage.onSecondCall().returns({
-                promise: () => Promise.resolve({Messages: [
-                    {Body: '3', MessageAttributes:{key: {StringValue: 'val'}}},
-                ]})
-            });
+            sqs.receiveMessage.onFirstCall().returns(Promise.resolve({Messages: [
+                {Body: '1', MessageAttributes:{key: {StringValue: 'val'}}},
+                {Body: '2', MessageAttributes:{key: {StringValue: 'nop'}}},
+            ]}));
+            sqs.receiveMessage.onSecondCall().returns(Promise.resolve({Messages: [
+                {Body: '3', MessageAttributes:{key: {StringValue: 'val'}}},
+            ]}));
             [2,3,4,5,6].forEach(call => {
-                sqs.receiveMessage.onCall(call).returns({
-                    promise: () => Promise.resolve({Messages: []})
-                });
+                sqs.receiveMessage.onCall(call).returns(Promise.resolve({Messages: []}));
             });
             
             // act
@@ -318,21 +272,15 @@ describe('SqsGrep', function () {
             // arrange
             const options = parse(['--queue=A', '--body=2', '--negate', '--full']);
             const sqsGrep = new SqsGrep(options);
-            sqs.receiveMessage.onFirstCall().returns({
-                promise: () => Promise.resolve({Messages: [
-                    {Body: '1'},
-                    {Body: '2'},
-                ]})
-            });
-            sqs.receiveMessage.onSecondCall().returns({
-                promise: () => Promise.resolve({Messages: [
-                    {Body: '3'},
-                ]})
-            });
+            sqs.receiveMessage.onFirstCall().returns(Promise.resolve({Messages: [
+                {Body: '1'},
+                {Body: '2'},
+            ]}));
+            sqs.receiveMessage.onSecondCall().returns(Promise.resolve({Messages: [
+                {Body: '3'},
+            ]}));
             [2,3,4,5,6].forEach(call => {
-                sqs.receiveMessage.onCall(call).returns({
-                    promise: () => Promise.resolve({Messages: []})
-                });
+                sqs.receiveMessage.onCall(call).returns(Promise.resolve({Messages: []}));
             });
             
             // act
@@ -347,15 +295,11 @@ describe('SqsGrep', function () {
             // arrange
             const options = parse(['--queue=A', '--all']);
             const sqsGrep = new SqsGrep(options);
-            sqs.receiveMessage.onFirstCall().returns({
-                promise: () => Promise.resolve({Messages: [
-                    {Body: '1'},
-                    {Body: '2'},
-                ]})
-            });
-            sqs.receiveMessage.onSecondCall().returns({
-                promise: () => Promise.reject(new Error('Fake error'))
-            });
+            sqs.receiveMessage.onFirstCall().returns(Promise.resolve({Messages: [
+                {Body: '1'},
+                {Body: '2'},
+            ]}));
+            sqs.receiveMessage.onSecondCall().returns(Promise.reject(new Error('Fake error')));
             
             // act, assert
             assert.rejects(sqsGrep.run(), new Error('Fake error'));
@@ -366,19 +310,15 @@ describe('SqsGrep', function () {
             // arrange
             const options = parse(['--queue=A', '--all']);
             const sqsGrep = new SqsGrep(options);
-            sqs.receiveMessage.onFirstCall().returns({
-                promise: () => Promise.resolve({Messages: [
-                    {Body: '1'},
-                    {Body: '2'},
-                ]})
-            });
+            sqs.receiveMessage.onFirstCall().returns(Promise.resolve({Messages: [
+                {Body: '1'},
+                {Body: '2'},
+            ]}));
             sqs.receiveMessage.onSecondCall().callsFake(() => {
                 sqsGrep.interrupt();
-                return {
-                    promise: () => Promise.resolve({Messages: [
-                        {Body: '3'},
-                    ]})
-                };
+                return Promise.resolve({Messages: [
+                    {Body: '3'},
+                ]});
             });
                         
             // act
@@ -394,17 +334,13 @@ describe('SqsGrep', function () {
             // arrange
             const options = parse(['--queue=A', '--all']);
             const sqsGrep = new SqsGrep(options);
-            sqs.receiveMessage.onFirstCall().returns({
-                promise: () => Promise.resolve({Messages: [
-                    {Body: '1'},
-                    {Body: '2'},
-                ]})
-            });
-            sqs.receiveMessage.onSecondCall().returns({
-                promise: () => Promise.resolve({Messages: [
-                    {Body: '3'},
-                ]})
-            });
+            sqs.receiveMessage.onFirstCall().returns(Promise.resolve({Messages: [
+                {Body: '1'},
+                {Body: '2'},
+            ]}));
+            sqs.receiveMessage.onSecondCall().returns(Promise.resolve({Messages: [
+                {Body: '3'},
+            ]}));
             const originalProcess = sqsGrep._processMatchedSqsMessage;
             sinon.stub(sqsGrep, '_processMatchedSqsMessage').callsFake(function() {
                 this.interrupt();
@@ -424,15 +360,13 @@ describe('SqsGrep', function () {
             // arrange
             const options = parse(['--queue=A', '--all', '--maxMessages=3']);
             const sqsGrep = new SqsGrep(options);
-            sqs.receiveMessage.onFirstCall().returns({
-                promise: () => Promise.resolve({Messages: [
-                    {Body: '1'},
-                    {Body: '2'},
-                    {Body: '3'},
-                    {Body: '4'},
-                    {Body: '5'},
-                ]})
-            });
+            sqs.receiveMessage.onFirstCall().returns(Promise.resolve({Messages: [
+                {Body: '1'},
+                {Body: '2'},
+                {Body: '3'},
+                {Body: '4'},
+                {Body: '5'},
+            ]}));
             
             // act
             const res = await sqsGrep.run();
@@ -450,11 +384,9 @@ describe('SqsGrep', function () {
             [0,1,2,3,4,5,6,7,8,9].forEach(messageNumber => {
                 sqs.receiveMessage.onCall(messageNumber).callsFake(() => {
                     clock.tick(1000);
-                    return {
-                        promise: () => Promise.resolve({Messages: [
-                            {Body: 'Message ' + messageNumber},
-                        ]})
-                    };
+                    return Promise.resolve({Messages: [
+                        {Body: 'Message ' + messageNumber},
+                    ]});
                 });
             });
             
@@ -470,16 +402,12 @@ describe('SqsGrep', function () {
             // arrange
             const options = parse(['--queue=A', '--all', '--copyTo=B']);
             const sqsGrep = new SqsGrep(options);
-            sqs.receiveMessage.onFirstCall().returns({
-                promise: () => Promise.resolve({Messages: [
-                    {Body: '1', MessageAttributes:{key: {StringValue: 'val'}}},
-                    {Body: '2'},
-                ]})
-            });
+            sqs.receiveMessage.onFirstCall().returns(Promise.resolve({Messages: [
+                {Body: '1', MessageAttributes:{key: {StringValue: 'val'}}},
+                {Body: '2'},
+            ]}));
             [1,2,3,4,5,6].forEach(call => {
-                sqs.receiveMessage.onCall(call).returns({
-                    promise: () => Promise.resolve({Messages: []})
-                });
+                sqs.receiveMessage.onCall(call).returns(Promise.resolve({Messages: []}));
             });
             
             // act
@@ -499,16 +427,12 @@ describe('SqsGrep', function () {
             // arrange
             const options = parse(['--queue=fake://queueA', '--all', '--copyTo=fake://queueB', '--moveTo=fake://queueC']);
             const sqsGrep = new SqsGrep(options);
-            sqs.receiveMessage.onFirstCall().returns({
-                promise: () => Promise.resolve({Messages: [
-                    {Body: '1', MessageAttributes:{key: {StringValue: 'val'}}},
-                    {Body: '2'},
-                ]})
-            });
+            sqs.receiveMessage.onFirstCall().returns(Promise.resolve({Messages: [
+                {Body: '1', MessageAttributes:{key: {StringValue: 'val'}}},
+                {Body: '2'},
+            ]}));
             [1,2,3,4,5,6].forEach(call => {
-                sqs.receiveMessage.onCall(call).returns({
-                    promise: () => Promise.resolve({Messages: []})
-                });
+                sqs.receiveMessage.onCall(call).returns(Promise.resolve({Messages: []}));
             });
             
             // act
@@ -526,16 +450,12 @@ describe('SqsGrep', function () {
             // arrange
             const options = parse(['--queue=A', '--all', '--copyTo=B', '--stripAttributes']);
             const sqsGrep = new SqsGrep(options);
-            sqs.receiveMessage.onFirstCall().returns({
-                promise: () => Promise.resolve({Messages: [
-                    {Body: '1', MessageAttributes:{key: {StringValue: 'val'}}},
-                    {Body: '2', MessageAttributes:{key: {StringValue: 'val'}}},
-                ]})
-            });
+            sqs.receiveMessage.onFirstCall().returns(Promise.resolve({Messages: [
+                {Body: '1', MessageAttributes:{key: {StringValue: 'val'}}},
+                {Body: '2', MessageAttributes:{key: {StringValue: 'val'}}},
+            ]}));
             [1,2,3,4,5,6].forEach(call => {
-                sqs.receiveMessage.onCall(call).returns({
-                    promise: () => Promise.resolve({Messages: []})
-                });
+                sqs.receiveMessage.onCall(call).returns(Promise.resolve({Messages: []}));
             });
             
             // act
@@ -555,20 +475,14 @@ describe('SqsGrep', function () {
             // arrange
             const options = parse(['--queue=A', '--all', '--copyTo=B.fifo']);
             const sqsGrep = new SqsGrep(options);
-            sqs.receiveMessage.onFirstCall().returns({
-                promise: () => Promise.resolve({Messages: [
-                    {Body: '1', MessageAttributes:{key: {StringValue: 'val'}}, Attributes:{}, MessageId: 'id'},
-                    {Body: '2', MessageAttributes:{key: {StringValue: 'val'}}, Attributes:{MessageGroupId:'group', MessageDeduplicationId: 'dup'}},
-                ]})
-            });
+            sqs.receiveMessage.onFirstCall().returns(Promise.resolve({Messages: [
+                {Body: '1', MessageAttributes:{key: {StringValue: 'val'}}, Attributes:{}, MessageId: 'id'},
+                {Body: '2', MessageAttributes:{key: {StringValue: 'val'}}, Attributes:{MessageGroupId:'group', MessageDeduplicationId: 'dup'}},
+            ]}));
             [1,2,3,4,5,6].forEach(call => {
-                sqs.receiveMessage.onCall(call).returns({
-                    promise: () => Promise.resolve({Messages: []})
-                });
+                sqs.receiveMessage.onCall(call).returns(Promise.resolve({Messages: []}));
             });
-            sqs.getQueueUrl.withArgs({QueueName:'B.fifo'}).returns({
-                promise: () => Promise.resolve({QueueUrl: 'fake://B.fifo'})
-            });
+            sqs.getQueueUrl.withArgs({QueueName:'B.fifo'}).returns(Promise.resolve({QueueUrl: 'fake://B.fifo'}));
                 
             // act
             const res = await sqsGrep.run();
@@ -589,16 +503,12 @@ describe('SqsGrep', function () {
             // arrange
             const options = parse(['--queue=A', '--all', '--publishTo=FAKE_ARN']);
             const sqsGrep = new SqsGrep(options);
-            sqs.receiveMessage.onFirstCall().returns({
-                promise: () => Promise.resolve({Messages: [
-                    {Body: '1', MessageAttributes:{key: {StringValue: 'val'}}},
-                    {Body: '2'},
-                ]})
-            });
+            sqs.receiveMessage.onFirstCall().returns(Promise.resolve({Messages: [
+                {Body: '1', MessageAttributes:{key: {StringValue: 'val'}}},
+                {Body: '2'},
+            ]}));
             [1,2,3,4,5,6].forEach(call => {
-                sqs.receiveMessage.onCall(call).returns({
-                    promise: () => Promise.resolve({Messages: []})
-                });
+                sqs.receiveMessage.onCall(call).returns(Promise.resolve({Messages: []}));
             });
             
             // act
@@ -619,16 +529,12 @@ describe('SqsGrep', function () {
             // arrange
             const options = parse(['--queue=A', '--all', '--publishTo=FAKE_ARN']);
             const sqsGrep = new SqsGrep(options);
-            sqs.receiveMessage.onFirstCall().returns({
-                promise: () => Promise.resolve({Messages: [
-                    {Body: '{"Type":"Notification","Message":"1"}'},
-                    {Body: '2'},
-                ]})
-            });
+            sqs.receiveMessage.onFirstCall().returns(Promise.resolve({Messages: [
+                {Body: '{"Type":"Notification","Message":"1"}'},
+                {Body: '2'},
+            ]}));
             [1,2,3,4,5,6].forEach(call => {
-                sqs.receiveMessage.onCall(call).returns({
-                    promise: () => Promise.resolve({Messages: []})
-                });
+                sqs.receiveMessage.onCall(call).returns(Promise.resolve({Messages: []}));
             });
             
             // act
@@ -649,16 +555,12 @@ describe('SqsGrep', function () {
             // arrange
             const options = parse(['--queue=A', '--all', '--publishTo=FAKE_ARN']);
             const sqsGrep = new SqsGrep(options);
-            sqs.receiveMessage.onFirstCall().returns({
-                promise: () => Promise.resolve({Messages: [
-                    {Body: '{"Type":"Notification","Message":"1","MessageAttributes":{"key":{"Value":"val","Type": "type"}}}'},
-                    {Body: '2', MessageAttributes:{key: {StringValue: 'val', DataType: 'type'}}},
-                ]})
-            });
+            sqs.receiveMessage.onFirstCall().returns(Promise.resolve({Messages: [
+                {Body: '{"Type":"Notification","Message":"1","MessageAttributes":{"key":{"Value":"val","Type": "type"}}}'},
+                {Body: '2', MessageAttributes:{key: {StringValue: 'val', DataType: 'type'}}},
+            ]}));
             [1,2,3,4,5,6].forEach(call => {
-                sqs.receiveMessage.onCall(call).returns({
-                    promise: () => Promise.resolve({Messages: []})
-                });
+                sqs.receiveMessage.onCall(call).returns(Promise.resolve({Messages: []}));
             });
             
             // act
@@ -683,16 +585,12 @@ describe('SqsGrep', function () {
             // arrange
             const options = parse(['--queue=A', '--all', '--publishTo=FAKE_ARN', '--stripAttributes']);
             const sqsGrep = new SqsGrep(options);
-            sqs.receiveMessage.onFirstCall().returns({
-                promise: () => Promise.resolve({Messages: [
-                    {Body: '1', MessageAttributes:{key: {StringValue: 'val'}}},
-                    {Body: '2'},
-                ]})
-            });
+            sqs.receiveMessage.onFirstCall().returns(Promise.resolve({Messages: [
+                {Body: '1', MessageAttributes:{key: {StringValue: 'val'}}},
+                {Body: '2'},
+            ]}));
             [1,2,3,4,5,6].forEach(call => {
-                sqs.receiveMessage.onCall(call).returns({
-                    promise: () => Promise.resolve({Messages: []})
-                });
+                sqs.receiveMessage.onCall(call).returns(Promise.resolve({Messages: []}));
             });
             
             // act
@@ -713,16 +611,12 @@ describe('SqsGrep', function () {
             // arrange
             const options = parse(['--queue=A', '--all', '--republish']);
             const sqsGrep = new SqsGrep(options);
-            sqs.receiveMessage.onFirstCall().returns({
-                promise: () => Promise.resolve({Messages: [
-                        {Body: '{"Type":"Notification","Message":"1", "TopicArn":"A"}'},
-                        {Body: '{"Type":"Notification","Message":"2", "TopicArn":"B"}'},
-                    ]})
-            });
+            sqs.receiveMessage.onFirstCall().returns(Promise.resolve({Messages: [
+                {Body: '{"Type":"Notification","Message":"1", "TopicArn":"A"}'},
+                {Body: '{"Type":"Notification","Message":"2", "TopicArn":"B"}'},
+            ]}));
             [1,2,3,4,5,6].forEach(call => {
-                sqs.receiveMessage.onCall(call).returns({
-                    promise: () => Promise.resolve({Messages: []})
-                });
+                sqs.receiveMessage.onCall(call).returns(Promise.resolve({Messages: []}));
             });
 
             // act
@@ -744,16 +638,12 @@ describe('SqsGrep', function () {
             // arrange
             const options = parse(['--queue=A', '--all', '--republish']);
             const sqsGrep = new SqsGrep(options);
-            sqs.receiveMessage.onFirstCall().returns({
-                promise: () => Promise.resolve({Messages: [
-                        {Body: '{"Type":"Notification","Message":"1", "TopicArn":"A", "MessageAttributes":{"key":{"Value":"val","Type": "type"}}}'},
-                        {Body: '{"Type":"Notification","Message":"2", "TopicArn":"B"}'},
-                    ]})
-            });
+            sqs.receiveMessage.onFirstCall().returns(Promise.resolve({Messages: [
+                {Body: '{"Type":"Notification","Message":"1", "TopicArn":"A", "MessageAttributes":{"key":{"Value":"val","Type": "type"}}}'},
+                {Body: '{"Type":"Notification","Message":"2", "TopicArn":"B"}'},
+            ]}));
             [1,2,3,4,5,6].forEach(call => {
-                sqs.receiveMessage.onCall(call).returns({
-                    promise: () => Promise.resolve({Messages: []})
-                });
+                sqs.receiveMessage.onCall(call).returns(Promise.resolve({Messages: []}));
             });
 
             // act
@@ -778,16 +668,12 @@ describe('SqsGrep', function () {
             // arrange
             const options = parse(['--queue=A', '--all', '--republish', '--stripAttributes']);
             const sqsGrep = new SqsGrep(options);
-            sqs.receiveMessage.onFirstCall().returns({
-                promise: () => Promise.resolve({Messages: [
-                        {Body: '{"Type":"Notification","Message":"1", "TopicArn":"A", "MessageAttributes":{"key":{"Value":"val","Type": "type"}}}'},
-                        {Body: '{"Type":"Notification","Message":"2", "TopicArn":"B"}'},
-                    ]})
-            });
+            sqs.receiveMessage.onFirstCall().returns(Promise.resolve({Messages: [
+                {Body: '{"Type":"Notification","Message":"1", "TopicArn":"A", "MessageAttributes":{"key":{"Value":"val","Type": "type"}}}'},
+                {Body: '{"Type":"Notification","Message":"2", "TopicArn":"B"}'},
+            ]}));
             [1,2,3,4,5,6].forEach(call => {
-                sqs.receiveMessage.onCall(call).returns({
-                    promise: () => Promise.resolve({Messages: []})
-                });
+                sqs.receiveMessage.onCall(call).returns(Promise.resolve({Messages: []}));
             });
 
             // act
@@ -807,20 +693,16 @@ describe('SqsGrep', function () {
             // arrange
             const options = parse(['--queue=A', '--all', '--republish']);
             const sqsGrep = new SqsGrep(options);
-            sqs.receiveMessage.onFirstCall().returns({
-                promise: () => Promise.resolve({
-                    Messages: [
-                        {Body: 'ABCD'}, // Non-JSON
-                        {Body: '{"Type":"ABCD","Message":"1", "TopicArn":"A"}'}, // Type not Notification
-                        {Body: '{"Type":"Notification", "TopicArn":"A"}'}, // No Message attribute
-                        {Body: '{"Type":"Notification","Message":"1"}'} // No Topic Arn attribute
-                    ]
-                })
-            });
+            sqs.receiveMessage.onFirstCall().returns(Promise.resolve({
+                Messages: [
+                    {Body: 'ABCD'}, // Non-JSON
+                    {Body: '{"Type":"ABCD","Message":"1", "TopicArn":"A"}'}, // Type not Notification
+                    {Body: '{"Type":"Notification", "TopicArn":"A"}'}, // No Message attribute
+                    {Body: '{"Type":"Notification","Message":"1"}'} // No Topic Arn attribute
+                ]
+            }));
             [1,2,3,4,5,6].forEach(call => {
-                sqs.receiveMessage.onCall(call).returns({
-                    promise: () => Promise.resolve({Messages: []})
-                });
+                sqs.receiveMessage.onCall(call).returns(Promise.resolve({Messages: []}));
             });
 
             // act
@@ -838,16 +720,12 @@ describe('SqsGrep', function () {
             // arrange
             const options = parse(['--queue=A', '--all', '--moveTo=B']);
             const sqsGrep = new SqsGrep(options);
-            sqs.receiveMessage.onFirstCall().returns({
-                promise: () => Promise.resolve({Messages: [
-                    {Body: '1'},
-                    {Body: '2'},
-                ]})
-            });
+            sqs.receiveMessage.onFirstCall().returns(Promise.resolve({Messages: [
+                {Body: '1'},
+                {Body: '2'},
+            ]}));
             [1,2,3,4,5,6].forEach(call => {
-                sqs.receiveMessage.onCall(call).returns({
-                    promise: () => Promise.resolve({Messages: []})
-                });
+                sqs.receiveMessage.onCall(call).returns(Promise.resolve({Messages: []}));
             });
             
             // act
@@ -865,16 +743,12 @@ describe('SqsGrep', function () {
             // arrange
             const options = parse(['--queue=A', '--all', '--moveTo=B', '--copyTo=C']);
             const sqsGrep = new SqsGrep(options);
-            sqs.receiveMessage.onFirstCall().returns({
-                promise: () => Promise.resolve({Messages: [
-                    {Body: '1'},
-                    {Body: '2'},
-                ]})
-            });
+            sqs.receiveMessage.onFirstCall().returns(Promise.resolve({Messages: [
+                {Body: '1'},
+                {Body: '2'},
+            ]}));
             [1,2,3,4,5,6].forEach(call => {
-                sqs.receiveMessage.onCall(call).returns({
-                    promise: () => Promise.resolve({Messages: []})
-                });
+                sqs.receiveMessage.onCall(call).returns(Promise.resolve({Messages: []}));
             });
             
             // act
@@ -892,21 +766,15 @@ describe('SqsGrep', function () {
             // arrange
             const options = parse(['--queue=A', '--all', '--redrive']);
             const sqsGrep = new SqsGrep(options);
-            sqs.listDeadLetterSourceQueues.onFirstCall().returns({
-                promise: () => Promise.resolve({queueUrls: [
-                    'fake://queueA'
-                ]})
-            });
-            sqs.receiveMessage.onFirstCall().returns({
-                promise: () => Promise.resolve({Messages: [
-                    {Body: '1'},
-                    {Body: '2'},
-                ]})
-            });
+            sqs.listDeadLetterSourceQueues.onFirstCall().returns(Promise.resolve({queueUrls: [
+                'fake://queueA'
+            ]}));
+            sqs.receiveMessage.onFirstCall().returns(Promise.resolve({Messages: [
+                {Body: '1'},
+                {Body: '2'},
+            ]}));
             [1,2,3,4,5,6].forEach(call => {
-                sqs.receiveMessage.onCall(call).returns({
-                    promise: () => Promise.resolve({Messages: []})
-                });
+                sqs.receiveMessage.onCall(call).returns(Promise.resolve({Messages: []}));
             });
             
             // act
@@ -924,9 +792,7 @@ describe('SqsGrep', function () {
             // arrange
             const options = parse(['--queue=A', '--all', '--redrive']);
             const sqsGrep = new SqsGrep(options);
-            sqs.listDeadLetterSourceQueues.onFirstCall().returns({
-                promise: () => Promise.resolve({})
-            });
+            sqs.listDeadLetterSourceQueues.onFirstCall().returns(Promise.resolve({}));
             
             // act, assert
             await assert.rejects(() => sqsGrep.run(),
@@ -937,13 +803,11 @@ describe('SqsGrep', function () {
             // arrange
             const options = parse(['--queue=A', '--all', '--redrive']);
             const sqsGrep = new SqsGrep(options);
-            sqs.listDeadLetterSourceQueues.onFirstCall().returns({
-                promise: () => Promise.resolve({queueUrls: [
-                    'fake://queueB',
-                    'fake://queueC',
-                    'fake://queueD',
-                ]})
-            });
+            sqs.listDeadLetterSourceQueues.onFirstCall().returns(Promise.resolve({queueUrls: [
+                'fake://queueB',
+                'fake://queueC',
+                'fake://queueD',
+            ]}));
             
             // act, assert
             await assert.rejects(() => sqsGrep.run(),
@@ -959,21 +823,15 @@ describe('SqsGrep', function () {
             }
             const options = parse(['--queue=A', '--all', '--outputFile=.out']);
             const sqsGrep = new SqsGrep(options);
-            sqs.receiveMessage.onFirstCall().returns({
-                promise: () => Promise.resolve({Messages: [
-                    {Body: '1'},
-                    {Body: '2'},
-                ]})
-            });
-            sqs.receiveMessage.onSecondCall().returns({
-                promise: () => Promise.resolve({Messages: [
-                    {Body: '3'},
-                ]})
-            });
+            sqs.receiveMessage.onFirstCall().returns(Promise.resolve({Messages: [
+                {Body: '1'},
+                {Body: '2'},
+            ]}));
+            sqs.receiveMessage.onSecondCall().returns(Promise.resolve({Messages: [
+                {Body: '3'},
+            ]}));
             [2,3,4,5,6].forEach(call => {
-                sqs.receiveMessage.onCall(call).returns({
-                    promise: () => Promise.resolve({Messages: []})
-                });
+                sqs.receiveMessage.onCall(call).returns(Promise.resolve({Messages: []}));
             });
             
             // act
@@ -1011,12 +869,10 @@ describe('SqsGrep', function () {
             // arrange
             const options = parse(['--queue=A', '--all', '--outputFile=.out']);
             const sqsGrep = new SqsGrep(options);
-            sqs.receiveMessage.onFirstCall().returns({
-                promise: () => Promise.resolve({Messages: [
-                    {Body: '1'},
-                    {Body: '2'},
-                ]})
-            });
+            sqs.receiveMessage.onFirstCall().returns(Promise.resolve({Messages: [
+                {Body: '1'},
+                {Body: '2'},
+            ]}));
             sinon.replace(fs, 'appendFile', (file, content, encoding, callback) => {
                 callback(new Error('Fake error'));
             });
@@ -1055,16 +911,12 @@ describe('SqsGrep', function () {
             // arrange
             const scriptFile = '/tmp/sqs-grep-test-script-1.js';
             const options = parse(['--queue=A', '--all', '--moveTo=B', '--scriptFile', scriptFile]);
-            sqs.receiveMessage.onFirstCall().returns({
-                promise: () => Promise.resolve({Messages: [
-                    {Body: '1'},
-                    {Body: '2'},
-                ]})
-            });
+            sqs.receiveMessage.onFirstCall().returns(Promise.resolve({Messages: [
+                {Body: '1'},
+                {Body: '2'},
+            ]}));
             [1,2,3,4,5,6].forEach(call => {
-                sqs.receiveMessage.onCall(call).returns({
-                    promise: () => Promise.resolve({Messages: []})
-                });
+                sqs.receiveMessage.onCall(call).returns(Promise.resolve({Messages: []}));
             });
             fs.writeFileSync(scriptFile, `
                 module.exports = {
@@ -1093,16 +945,12 @@ describe('SqsGrep', function () {
             // arrange
             const scriptFile = '/tmp/sqs-grep-test-script-2.js';
             const options = parse(['--queue=A', '--all', '--moveTo=B', '--scriptFile', scriptFile]);
-            sqs.receiveMessage.onFirstCall().returns({
-                promise: () => Promise.resolve({Messages: [
-                    {Body: '1'},
-                    {Body: '2'},
-                ]})
-            });
+            sqs.receiveMessage.onFirstCall().returns(Promise.resolve({Messages: [
+                {Body: '1'},
+                {Body: '2'},
+            ]}));
             [1,2,3,4,5,6].forEach(call => {
-                sqs.receiveMessage.onCall(call).returns({
-                    promise: () => Promise.resolve({Messages: []})
-                });
+                sqs.receiveMessage.onCall(call).returns(Promise.resolve({Messages: []}));
             });
             fs.writeFileSync(scriptFile, `
                 module.exports = {
@@ -1135,16 +983,12 @@ describe('SqsGrep', function () {
             // arrange
             const scriptFile = '/tmp/sqs-grep-test-script-3.js';
             const options = parse(['--queue=A', '--all', '--moveTo=B', '--scriptFile', scriptFile]);
-            sqs.receiveMessage.onFirstCall().returns({
-                promise: () => Promise.resolve({Messages: [
-                    {Body: '1'},
-                    {Body: '2'},
-                ]})
-            });
+            sqs.receiveMessage.onFirstCall().returns(Promise.resolve({Messages: [
+                {Body: '1'},
+                {Body: '2'},
+            ]}));
             [1,2,3,4,5,6].forEach(call => {
-                sqs.receiveMessage.onCall(call).returns({
-                    promise: () => Promise.resolve({Messages: []})
-                });
+                sqs.receiveMessage.onCall(call).returns(Promise.resolve({Messages: []}));
             });
             fs.writeFileSync(scriptFile, `
                 const { ungzip } = sqs_grep_require('node-gzip');

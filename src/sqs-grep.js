@@ -2,7 +2,8 @@ const fs = require('fs');
 const os = require('os');
 const path = require('path');
 const chalk = require('chalk');
-const AWS = require('aws-sdk');
+const { SNS } = require("@aws-sdk/client-sns");
+const { SQS } = require("@aws-sdk/client-sqs");
 const lineByLine = require('n-readlines');
 const Bottleneck = require('bottleneck');
 require('node-gzip');
@@ -30,8 +31,8 @@ class SqsGrep {
         };
         const awsOptions = SqsGrep._getAwsOptions(options);
         this.options = options;
-        this.sqs = options.sqs || new AWS.SQS(awsOptions);
-        this.sns = options.sns || new AWS.SNS(awsOptions);
+        this.sqs = options.sqs || new SQS(awsOptions);
+        this.sns = options.sns || new SNS(awsOptions);
         this.log = options.log || console.log;
         this.running = false;
         this.emptyReceives = 0;
@@ -190,7 +191,7 @@ class SqsGrep {
             opts.sessionToken = options.sessionToken;
         }
         if (options.endpointUrl) {
-            opts.endpoint = new AWS.Endpoint(options.endpointUrl);
+            opts.endpoint = options.endpointUrl;
         }
         if (options.verbose) {
             opts.logger = { log: options.log || console.log };
@@ -214,7 +215,7 @@ class SqsGrep {
                 VisibilityTimeout: Math.max(1, this.options.timeout + 10 - elapsedSeconds),
                 MessageAttributeNames: ['All'],
                 AttributeNames: ['All'],
-            }).promise();
+            });
             return res;
         }
     }
@@ -232,12 +233,12 @@ class SqsGrep {
             this.log(chalk`Connecting to SQS queue '{green ${queue}}' in the '{green ${this.options.region}}' region...`);
             queueUrl = (await this.sqs.getQueueUrl({
                 QueueName: queue,
-            }).promise()).QueueUrl;
+            })).QueueUrl;
         }
         const queueAttributes = await this.sqs.getQueueAttributes({
             QueueUrl: queueUrl,
             AttributeNames: ['ApproximateNumberOfMessages']
-        }).promise();
+        });
         this.log(chalk`This queue has approximately {green ${queueAttributes.Attributes.ApproximateNumberOfMessages}} messages at the moment.`);
         return queueUrl;
     }
@@ -251,7 +252,7 @@ class SqsGrep {
         const res = await this.sqs.listDeadLetterSourceQueues({
             QueueUrl: dlqUrl,
             MaxResults: 1000,
-        }).promise();
+        });
         const urls = res.queueUrls || [];
         if (urls.length !== 1) {
             const msg = urls.length === 0
@@ -287,7 +288,7 @@ class SqsGrep {
             this.log(chalk`Connecting to target SNS topic '{green ${this.options.publishTo}}' in the '{green ${this.options.region}}' region...`);
             await this.sns.getTopicAttributes({
                 TopicArn: this.options.publishTo,
-            }).promise();
+            });
         }
     }
 
@@ -370,7 +371,7 @@ class SqsGrep {
                     MessageBody: message.Body,
                     MessageAttributes: options.stripAttributes ? null : message.MessageAttributes,
                     ...fifoAttributes
-                }).promise();
+                });
             }
             // Publish the message to the target topic
             if (options.publishTo) {
@@ -378,7 +379,7 @@ class SqsGrep {
                     TopicArn: options.publishTo,
                     Message: this._getBodyToPublish(message),
                     MessageAttributes: options.stripAttributes ? null : this._getMessageAttributesToPublish(message),
-                }).promise();
+                });
             }
             // Republish message to it's topic of origin
             if (options.republish) {
@@ -390,7 +391,7 @@ class SqsGrep {
                             TopicArn: notification.TopicArn,
                             Message: notification.Message,
                             MessageAttributes: options.stripAttributes ? null : this._getSnsMessageAttributeFromSqs(messageAttributes),
-                        }).promise();
+                        });
                     }
                 } catch (err) {
                     // ignore
@@ -402,7 +403,7 @@ class SqsGrep {
             await this.sqs.deleteMessage({
                 QueueUrl: options.sourceQueueUrl,
                 ReceiptHandle: message.ReceiptHandle
-            }).promise();
+            });
         }
     }
 
