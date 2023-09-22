@@ -1,0 +1,53 @@
+name: Node.js CI
+
+on:
+  push:
+    branches: [ "master" ]
+    tags:
+      - v**
+  pull_request:
+    branches: [ "master" ]
+env:
+  RUN_INTEGRATION_TESTS: 1
+  
+jobs:
+  build:
+    runs-on: ubuntu-latest
+
+    steps:
+    - uses: actions/checkout@v3
+    - name: Use Node.js 18
+      uses: actions/setup-node@v3
+      with:
+        node-version: 18
+        registry-url: https://registry.npmjs.org/
+        cache: 'npm'
+    
+    # Install packages
+    - name: Install packages
+      run: npm ci
+
+    # Build and test
+    - name: Build and test
+      run: npm test
+    
+    # Upload report to Coveralls
+    - name: Upload report to Coveralls
+      uses: coverallsapp/github-action@v2
+
+    # Create github release
+    - name: Create github release
+      if: startsWith(github.event.ref, 'refs/tags/v')
+      uses: softprops/action-gh-release@v1
+      with:
+        files: |
+          build/sqs-grep-linux-x64.tbz
+          build/sqs-grep-macos-x64.tbz
+          build/sqs-grep-win-x64.zip
+
+    # Publish to NPM Registry
+    - name: Publish to NPM Registry
+      if: startsWith(github.event.ref, 'refs/tags/v')
+      run: npm publish
+      env:
+        NODE_AUTH_TOKEN: ${{secrets.npm_token}}

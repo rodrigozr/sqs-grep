@@ -1,6 +1,6 @@
 # AWS SQS grep 
 [![npm version](https://badge.fury.io/js/sqs-grep.svg)](https://badge.fury.io/js/sqs-grep)
-[![Build Status](https://travis-ci.com/rodrigozr/sqs-grep.svg?branch=master)](https://travis-ci.com/github/rodrigozr/sqs-grep)
+[![Build Status](https://github.com/rodrigozr/sqs-grep/actions/workflows/node.js.yml/badge.svg)](https://github.com/rodrigozr/sqs-grep/actions/workflows/node.js.yml)
 [![Coverage Status](https://coveralls.io/repos/github/rodrigozr/sqs-grep/badge.svg?branch=master)](https://coveralls.io/github/rodrigozr/sqs-grep?branch=master)
 [![Known Vulnerabilities](https://snyk.io/test/github/rodrigozr/sqs-grep/badge.svg)](https://snyk.io/test/github/rodrigozr/sqs-grep)
 [![License: MIT](https://img.shields.io/badge/License-MIT-green.svg)](https://opensource.org/licenses/MIT)
