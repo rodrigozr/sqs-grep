@@ -31,17 +31,17 @@ describe('Integration Tests', function () {
                 /* ignore */
             }
             // Start the docker container
-            await exec(`docker run -d --name ${containerName} -p 4575-4576:4575-4576 -e SERVICES=sqs,sns localstack/localstack-light:0.11.3`);
+            await exec(`docker run -d --name ${containerName} -p 4566:4566 -p 4510-4559:4510-4559 -e SERVICES=sqs,sns localstack/localstack:3.0.2`);
             process.env['AWS_ACCESS_KEY_ID'] = 'test';
             process.env['AWS_SECRET_ACCESS_KEY'] = 'test';
             // Create a custom SQS connector
-            let options = parseOptions(['--endpointUrl', 'http://localhost:4576']);
+            let options = parseOptions(['--endpointUrl', 'http://localhost:4566']);
             sqs = new SQS({
                 region: options.region,
                 endpoint: options.endpointUrl,
             });
             // Create a custom SNS connector
-            options = parseOptions(['--endpointUrl', 'http://localhost:4575']);
+            options = parseOptions(['--endpointUrl', 'http://localhost:4566']);
             sns = new SNS({
                 region: options.region,
                 endpoint: options.endpointUrl,
@@ -150,6 +150,7 @@ describe('Integration Tests', function () {
         
         // act
         const {qtyScanned, qtyMatched} = await new SqsGrep(parse(['--queue=Queue1', '--publishTo', topic, '--body=test'])).run();
+        await new Promise(resolve => setTimeout(resolve, 50));
         
         // assert
         assert.equal(qtyScanned, 4);
