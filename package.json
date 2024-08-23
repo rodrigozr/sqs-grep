@@ -43,7 +43,7 @@
   "license": "MIT",
   "dependencies": {
     "@aws-sdk/client-sns": "^3.490.0",
-    "@aws-sdk/client-sqs": "^3.490.0",
+    "@aws-sdk/client-sqs": "^3.622.0",
     "bottleneck": "^2.19.5",
     "chalk": "^4.1.2",
     "command-line-args": "^5.2.1",
