@@ -42,7 +42,7 @@
   "author": "Rodrigo Rosauro",
   "license": "MIT",
   "dependencies": {
-    "@aws-sdk/client-sns": "^3.490.0",
+    "@aws-sdk/client-sns": "^3.623.0",
     "@aws-sdk/client-sqs": "^3.490.0",
     "bottleneck": "^2.19.5",
     "chalk": "^4.1.2",
