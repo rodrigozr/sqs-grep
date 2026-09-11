@@ -14,15 +14,29 @@ jobs:
   build:
     runs-on: ubuntu-latest
 
+    # 'id-token: write' is required for npm trusted publishing (OIDC): without it
+    # GitHub does not mint an OIDC token, so 'npm publish' cannot authenticate and
+    # fails with a "404 Not Found - PUT" from the registry.
+    # 'contents: write' is needed by the "Create github release" step below.
+    permissions:
+      contents: write
+      id-token: write
+
     steps:
-    - uses: actions/checkout@v3
+    - uses: actions/checkout@v4
     - name: Use Node.js 22
-      uses: actions/setup-node@v3
+      uses: actions/setup-node@v4
       with:
-        node-version: 22
+        # Trusted publishing (OIDC) requires Node >= 22.14.0 and npm >= 11.5.1
+        node-version: 22.14.0
         registry-url: https://registry.npmjs.org/
         cache: 'npm'
     
+    # Trusted publishing (OIDC) requires npm 11.5.1 or later; the version bundled
+    # with Node 22 is older than that, so upgrade it before publishing.
+    - name: Update NPM
+      run: npm install -g npm@latest
+
     # Install packages
     - name: Install packages
       run: npm ci

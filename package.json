@@ -6,6 +6,13 @@
   "bin": {
     "sqs-grep": "src/main.js"
   },
+  "files": [
+    "index.js",
+    "src/",
+    "readme.md",
+    "user-scripts.md",
+    "LICENSE"
+  ],
   "scripts": {
     "test": "npm run test-only",
     "test-only": "nyc mocha && eslint src/*.js",
