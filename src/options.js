@@ -44,6 +44,8 @@ const optionDefinitions = [
     { name: 'stripAttributes', type: Boolean, defaultValue: false, description: 'This option will cause all message attributes to be stripped when moving, copying and publishing the message (used with {bold --moveTo}, {bold --copyTo}, {bold --publishTo}, and {bold --republish})' },
     { name: 'outputFile', alias: 'o', typeLabel: '{underline file}', description: 'Write matched messages to the given output file instead of the console. Using this option automatically sets {bold --full} to have exact message reproduction, which can be later used with {bold --inputFile}' },
     { name: 'inputFile', typeLabel: '{underline file}', description: 'Reads messages from a local file (generated using {bold --outputFile}) instead of from input queue' },
+    { name: 'stateFile', typeLabel: '{underline file}', description: 'Saves the progress of an {bold --inputFile} scan into the given file, so that a future run using the same {bold --stateFile} resumes from the message right after the last one processed. Requires {bold --inputFile}' },
+    { name: 'stateFileInterval', type: Number, defaultValue: 100, typeLabel: '{underline messages}', description: 'Number of processed messages between {bold --stateFile} saves (default: 100). The state is always saved at the end of the execution, including when it is interrupted' },
     { name: 'scriptFile', typeLabel: '{underline file.js}', description: 'Uses a custom user-script to process messages. See https://github.com/rodrigozr/sqs-grep/blob/master/user-scripts.md' },
     { name: 'emptyReceives', alias: 'e', type: Number, defaultValue: 5, description: 'Consider the queue fully scanned after this number of consecutive "empty receives" (default: 5)' },
     { name: 'wait', alias: 'w', type: Number, typeLabel: '{underline seconds}', defaultValue: 0, description: 'Number of seconds to wait after each "empty receive" (default: 0 - do not wait)' },
@@ -96,6 +98,9 @@ const usage = [
             + `{italic Archives all messages from a queue into a local file, and then later copy them to another queue}\n`
             + `$ sqs-grep --queue MyQueue --all --outputFile messages.txt\n`
             + `$ sqs-grep --inputFile messages.txt --all --copyTo TargetQueue\n`
+            + `\n`
+            + `{italic Copy messages from a local file to a queue, keeping track of the progress so that it can be safely resumed}\n`
+            + `$ sqs-grep --inputFile messages.txt --all --copyTo TargetQueue --stateFile state.json\n`
     },
 ];
 
@@ -178,6 +183,12 @@ function validateOptions(options, log) {
         if (options.moveTo) {
             return error(chalk`{red ERROR: You can't specify both {bold --inputFile} and {bold --moveTo}! Use {bold --copyTo} instead}`);
         }
+    }
+    if (options.stateFile && !options.inputFile) {
+        return error(chalk`{red ERROR: {bold --stateFile} can only be used together with {bold --inputFile}!}`);
+    }
+    if (options.stateFile && !(options.stateFileInterval > 0)) {
+        return error(chalk`{red ERROR: Invalid {bold --stateFileInterval} value (must be greater than 0)}`);
     }
     if (options.outputFile) {
         options.full = true;

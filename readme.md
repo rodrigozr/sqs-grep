@@ -17,6 +17,7 @@ It can also delete the matching messages, copy/move them to another SQS queue an
 * Search by message attributes
 * Silent mode if you just want to count the number of matched messages
 * Dump matched messages to file, which can later be used for offline processing and archival
+* Resume an interrupted offline processing run exactly where it stopped (`--stateFile`)
 * Move/copy matched messages to another SQS queue
 * Publish matched messages to an SNS topic (or re-publish to the original topic if the message originally came from SNS)
 * Delete matched messages
@@ -56,6 +57,42 @@ Archives all messages from a queue into a local file, and then later copy them t
 $ sqs-grep --queue MyQueue --all --outputFile messages.txt
 $ sqs-grep --inputFile messages.txt --all --copyTo TargetQueue
 ```
+
+Copy messages from a local file to a queue, keeping track of the progress so that it can be safely resumed
+```sh
+$ sqs-grep --inputFile messages.txt --all --copyTo TargetQueue --stateFile state.json
+```
+
+# Resuming an interrupted offline run
+When processing messages from a local file (`--inputFile`), you can pass `--stateFile <file>` to keep
+track of how far the processing went. The state file records the index of the last message which was
+fully processed, so that a future run using the same `--inputFile` and `--stateFile` skips everything
+that was already done and resumes from the next message.
+
+```sh
+# First run - interrupted with CTRL+C after 10 messages
+$ sqs-grep --inputFile queue.jsonl --all --copyTo TargetQueue --stateFile state.json
+Caught interrupt signal
+Progress saved to 'state.json' (last processed message: 10).
+
+# Second run - resumes from message 11
+$ sqs-grep --inputFile queue.jsonl --all --copyTo TargetQueue --stateFile state.json
+Resuming from message 11 - skipping the first 10 message(s) already processed...
+```
+
+A few things worth knowing:
+* `--stateFile` requires `--inputFile` (there is no stable message ordering to resume from in an SQS queue).
+* To avoid writing to disk on every single message, the state is only saved every 100 processed messages
+  (configurable with `--stateFileInterval`), plus once at the end of the execution - including when the
+  execution is interrupted or fails. This means that a resumed run may re-process a few messages which
+  were already handled, so processing is "at-least-once" rather than "exactly-once".
+* Both matched and unmatched messages count as processed, so a resumed run never re-scans messages which
+  were already filtered out.
+* Only a contiguous run of processed messages is ever recorded, so a message which was still in-flight when
+  the execution stopped is never skipped - even when using `--parallel`.
+* The state file records which input file it belongs to. If it refers to a different file, is corrupt, or
+  does not exist, it is ignored with a warning and the processing starts from the first message.
+* Deleting the state file (or pointing `--stateFile` at a new path) restarts the processing from the beginning.
 
 # Providing credentials
 By default, sqs-grep will read credentials from:
@@ -133,7 +170,7 @@ If you don't specify `--moveTo` nor `--delete`, and your source queue is larger 
 ```
 $ sqs-grep --help
 
-sqs-grep version 1.15.0
+sqs-grep version 1.19.0
 
 sqs-grep
 
@@ -191,7 +228,13 @@ Other options
                                this option automatically sets --full to have exact message reproduction,     
                                which can be later used with --inputFile                                      
   --inputFile file             Reads messages from a local file (generated using --outputFile) instead of    
-                               from input queue                                                              
+                               from input queue                                                             
+  --stateFile file             Saves the progress of an --inputFile scan into the given file, so that a      
+                               future run using the same --stateFile resumes from the message right after    
+                               the last one processed. Requires --inputFile                                 
+  --stateFileInterval messages Number of processed messages between --stateFile saves (default: 100). The    
+                               state is always saved at the end of the execution, including when it is       
+                               interrupted                                                                   
   --scriptFile file.js         Uses a custom user-script to process messages. See                            
                                https://github.com/rodrigozr/sqs-grep/blob/master/user-scripts.md             
   -e, --emptyReceives number   Consider the queue fully scanned after this number of consecutive "empty      
@@ -227,6 +270,11 @@ Usage examples
   them to another queue                                                         
   $ sqs-grep --queue MyQueue --all --outputFile messages.txt                    
   $ sqs-grep --inputFile messages.txt --all --copyTo TargetQueue                
+                                                                                
+  Copy messages from a local file to a queue, keeping track of the progress so   
+  that it can be safely resumed                                                 
+  $ sqs-grep --inputFile messages.txt --all --copyTo TargetQueue --stateFile     
+  state.json                                                                    
 
 ```
 

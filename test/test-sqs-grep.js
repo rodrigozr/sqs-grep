@@ -2,10 +2,12 @@
 const assert = require('assert');
 const sinon = require('sinon');
 const fs = require('fs');
+const os = require('os');
+const path = require('path');
 const { SNS } = require("@aws-sdk/client-sns");
 const { SQS } = require("@aws-sdk/client-sqs");
 const { parseOptions } = require('../src/options');
-const { SqsGrep } = require('../src/sqs-grep');
+const { SqsGrep, MESSAGE_INDEX } = require('../src/sqs-grep');
 
 const emptyLog = sinon.stub();
 
@@ -1013,4 +1015,416 @@ describe('SqsGrep', function () {
             assert.equal(res.qtyMatched, 2);
         });
     });
+    describe('--stateFile', function () {
+        let tempDir, stateFilePath, inputFilePath;
+        const readState = () => JSON.parse(fs.readFileSync(stateFilePath, 'utf-8'));
+        const writeInputFile = qty => {
+            const lines = [];
+            for (let i = 1; i <= qty; i++) {
+                lines.push(JSON.stringify({Body: `msg${i}`, MessageId: `id${i}`}));
+            }
+            fs.writeFileSync(inputFilePath, lines.join('\n'), 'utf-8');
+        };
+        const stateArgs = extra => [
+            `--inputFile=${inputFilePath}`,
+            '--all',
+            `--stateFile=${stateFilePath}`,
+            ...(extra || []),
+        ];
+
+        beforeEach(function () {
+            tempDir = fs.mkdtempSync(path.join(os.tmpdir(), 'sqs-grep-run-state-'));
+            stateFilePath = path.join(tempDir, 'state.json');
+            inputFilePath = path.join(tempDir, 'queue.jsonl');
+        });
+        afterEach(function () {
+            fs.rmSync(tempDir, {recursive: true, force: true});
+        });
+
+        it('should not track state when --stateFile is not set', async function () {
+            // arrange
+            writeInputFile(3);
+            const sqsGrep = new SqsGrep(parse([`--inputFile=${inputFilePath}`, '--all']));
+
+            // act
+            const res = await sqsGrep.run();
+
+            // assert
+            assert.equal(res.qtyScanned, 3);
+            assert.equal(sqsGrep.stateFile, null);
+            assert.equal(fs.existsSync(stateFilePath), false);
+        });
+
+        it('should save the state after a full scan', async function () {
+            // arrange
+            writeInputFile(3);
+            const sqsGrep = new SqsGrep(parse(stateArgs()));
+
+            // act
+            const res = await sqsGrep.run();
+
+            // assert
+            assert.equal(res.qtyScanned, 3);
+            assert.equal(res.qtyMatched, 3);
+            assert.equal(readState().lastProcessedIndex, 3);
+            assert.equal(readState().inputFile, inputFilePath);
+        });
+
+        it('should resume from the message after the last one processed', async function () {
+            // arrange
+            writeInputFile(10);
+            fs.writeFileSync(stateFilePath, JSON.stringify({inputFile: inputFilePath, lastProcessedIndex: 7}));
+            const sqsGrep = new SqsGrep(parse(stateArgs(['--copyTo=B'])));
+
+            // act
+            const res = await sqsGrep.run();
+
+            // assert
+            assert.equal(res.qtyScanned, 3, 'Should only scan messages 8, 9 and 10');
+            assert.equal(sqs.sendMessage.callCount, 3);
+            sinon.assert.calledWith(sqs.sendMessage.firstCall, sinon.match.has('MessageBody', 'msg8'));
+            sinon.assert.calledWith(sqs.sendMessage.secondCall, sinon.match.has('MessageBody', 'msg9'));
+            sinon.assert.calledWith(sqs.sendMessage.thirdCall, sinon.match.has('MessageBody', 'msg10'));
+            assert.equal(readState().lastProcessedIndex, 10);
+        });
+
+        it('should process nothing when the whole file was already processed', async function () {
+            // arrange
+            writeInputFile(4);
+            fs.writeFileSync(stateFilePath, JSON.stringify({inputFile: inputFilePath, lastProcessedIndex: 4}));
+            const sqsGrep = new SqsGrep(parse(stateArgs(['--copyTo=B'])));
+
+            // act
+            const res = await sqsGrep.run();
+
+            // assert
+            assert.equal(res.qtyScanned, 0);
+            assert.equal(res.qtyMatched, 0);
+            assert.equal(sqs.sendMessage.callCount, 0);
+            assert.equal(readState().lastProcessedIndex, 4, 'Should keep the previous state untouched');
+        });
+
+        it('should warn when the state file is ahead of the input file', async function () {
+            // arrange
+            writeInputFile(2);
+            fs.writeFileSync(stateFilePath, JSON.stringify({inputFile: inputFilePath, lastProcessedIndex: 5}));
+            const logs = [];
+            const options = parse(stateArgs());
+            options.log = msg => logs.push(String(msg));
+            const sqsGrep = new SqsGrep(options);
+
+            // act
+            const res = await sqsGrep.run();
+
+            // assert
+            assert.equal(res.qtyScanned, 0);
+            assert.equal(/only contains 2 message\(s\), but the state file says that 5/.test(logs.join('\n')), true);
+        });
+
+        it('should start over when the state file refers to another input file', async function () {
+            // arrange
+            writeInputFile(3);
+            fs.writeFileSync(stateFilePath, JSON.stringify({
+                inputFile: path.join(tempDir, 'another.jsonl'),
+                lastProcessedIndex: 2,
+            }));
+            const sqsGrep = new SqsGrep(parse(stateArgs()));
+
+            // act
+            const res = await sqsGrep.run();
+
+            // assert
+            assert.equal(res.qtyScanned, 3, 'Should scan the whole file again');
+            assert.equal(readState().lastProcessedIndex, 3);
+        });
+
+        it('should start over when the state file is corrupt', async function () {
+            // arrange
+            writeInputFile(3);
+            fs.writeFileSync(stateFilePath, 'corrupt-state');
+            const sqsGrep = new SqsGrep(parse(stateArgs()));
+
+            // act
+            const res = await sqsGrep.run();
+
+            // assert
+            assert.equal(res.qtyScanned, 3);
+            assert.equal(readState().lastProcessedIndex, 3);
+        });
+
+        it('should track unmatched messages as processed', async function () {
+            // arrange
+            writeInputFile(5);
+            const sqsGrep = new SqsGrep(parse([
+                `--inputFile=${inputFilePath}`,
+                '--body=msg2',
+                `--stateFile=${stateFilePath}`,
+            ]));
+
+            // act
+            const res = await sqsGrep.run();
+
+            // assert
+            assert.equal(res.qtyScanned, 5);
+            assert.equal(res.qtyMatched, 1);
+            assert.equal(readState().lastProcessedIndex, 5, 'Unmatched messages must not be scanned again');
+        });
+
+        it('should save periodically based on --stateFileInterval', async function () {
+            // arrange
+            writeInputFile(10);
+            const sqsGrep = new SqsGrep(parse(stateArgs(['--stateFileInterval=2'])));
+            const saved = [];
+            const originalRename = fs.renameSync;
+            sinon.replace(fs, 'renameSync', (from, to) => {
+                saved.push(JSON.parse(fs.readFileSync(from, 'utf-8')).lastProcessedIndex);
+                return originalRename(from, to);
+            });
+
+            // act
+            const res = await sqsGrep.run();
+
+            // assert
+            assert.equal(res.qtyScanned, 10);
+            assert.deepEqual(saved, [2, 4, 6, 8, 10], 'Should save every 2 messages');
+        });
+
+        it('should not save on every single message by default', async function () {
+            // arrange
+            writeInputFile(10);
+            const sqsGrep = new SqsGrep(parse(stateArgs()));
+            const renameSync = sinon.spy(fs, 'renameSync');
+
+            // act
+            await sqsGrep.run();
+
+            // assert
+            assert.equal(renameSync.callCount, 1, 'Should only save once, at the end of the execution');
+            assert.equal(readState().lastProcessedIndex, 10);
+        });
+
+        it('should save the state when interrupted', async function () {
+            // arrange
+            writeInputFile(10);
+            const options = parse(stateArgs(['--stateFileInterval=1000']));
+            const sqsGrep = new SqsGrep(options);
+            const scriptHook = sqsGrep.userScript.preProcessMessage;
+            sqsGrep.userScript.preProcessMessage = async message => {
+                await scriptHook(message);
+                if (message.Body === 'msg4') {
+                    sqsGrep.interrupt();
+                }
+            };
+
+            // act
+            const res = await sqsGrep.run();
+
+            // assert
+            assert.equal(res.qtyScanned, 4);
+            assert.equal(sqsGrep.running, false);
+            assert.equal(readState().lastProcessedIndex, 4, 'Should save progress on interrupt');
+        });
+
+        it('should resume after an interruption', async function () {
+            // arrange
+            writeInputFile(6);
+            const interruptingRun = new SqsGrep(parse(stateArgs(['--copyTo=B', '--stateFileInterval=1000'])));
+            const scriptHook = interruptingRun.userScript.preProcessMessage;
+            interruptingRun.userScript.preProcessMessage = async message => {
+                await scriptHook(message);
+                if (message.Body === 'msg3') {
+                    interruptingRun.interrupt();
+                }
+            };
+
+            // act
+            const firstRes = await interruptingRun.run();
+            const resumedRun = new SqsGrep(parse(stateArgs(['--copyTo=B'])));
+            const secondRes = await resumedRun.run();
+
+            // assert
+            assert.equal(firstRes.qtyScanned, 3);
+            assert.equal(secondRes.qtyScanned, 3, 'Should scan the remaining 3 messages');
+            assert.equal(readState().lastProcessedIndex, 6);
+            // Each message must have been copied exactly once, in order
+            assert.equal(sqs.sendMessage.callCount, 6);
+            const bodies = sqs.sendMessage.getCalls().map(call => call.args[0].MessageBody);
+            assert.deepEqual(bodies, ['msg1', 'msg2', 'msg3', 'msg4', 'msg5', 'msg6']);
+        });
+
+        it('should save the state when the execution fails', async function () {
+            // arrange
+            writeInputFile(10);
+            sqs.sendMessage.onCall(0).returns(Promise.resolve({}));
+            sqs.sendMessage.onCall(1).returns(Promise.resolve({}));
+            sqs.sendMessage.onCall(2).returns(Promise.reject(new Error('Fake error')));
+            const sqsGrep = new SqsGrep(parse(stateArgs(['--copyTo=B', '--stateFileInterval=1000'])));
+
+            // act, assert
+            await assert.rejects(() => sqsGrep.run(), err => err.message === 'Fake error');
+            assert.equal(readState().lastProcessedIndex, 2, 'Should save the messages processed before the failure');
+        });
+
+        it('should not resume past a message which is still in flight', async function () {
+            // arrange
+            writeInputFile(4);
+            const options = parse(stateArgs(['--copyTo=B', '--parallel=2', '--stateFileInterval=1000']));
+            const sqsGrep = new SqsGrep(options);
+            // The copy of the first message never completes until we release it,
+            // while the remaining messages are processed by the second poller
+            let releaseFirstMessage;
+            let lastMessageProcessed;
+            const lastMessageDone = new Promise(resolve => { lastMessageProcessed = resolve });
+            sqs.sendMessage.callsFake(params => {
+                if (params.MessageBody === 'msg1') {
+                    return new Promise(resolve => { releaseFirstMessage = () => resolve({}) });
+                }
+                if (params.MessageBody === 'msg4') {
+                    setImmediate(lastMessageProcessed);
+                }
+                return Promise.resolve({});
+            });
+
+            // act
+            const runPromise = sqsGrep.run();
+            await lastMessageDone;
+            await new Promise(resolve => setImmediate(resolve));
+            const inFlightIndex = sqsGrep.stateFile.lastProcessedIndex;
+            const inFlightPending = [...sqsGrep.stateFile.pendingIndexes].sort();
+            releaseFirstMessage();
+            const res = await runPromise;
+
+            // assert
+            assert.equal(inFlightIndex, 0, 'Must not skip a message which is still in flight');
+            assert.deepEqual(inFlightPending, [2, 3, 4], 'Later messages must wait for message 1');
+            assert.equal(res.qtyScanned, 4);
+            assert.equal(readState().lastProcessedIndex, 4, 'Should advance once message 1 completes');
+        });
+
+        it('should stop at --maxMessages and resume from the next message', async function () {
+            // arrange
+            writeInputFile(10);
+            const firstRun = new SqsGrep(parse(stateArgs(['--copyTo=B', '--maxMessages=4'])));
+
+            // act
+            const firstRes = await firstRun.run();
+            const secondRun = new SqsGrep(parse(stateArgs(['--copyTo=B', '--maxMessages=4'])));
+            const secondRes = await secondRun.run();
+
+            // assert
+            assert.equal(firstRes.qtyMatched, 4);
+            assert.equal(secondRes.qtyMatched, 4);
+            assert.equal(readState().lastProcessedIndex, 8);
+            const bodies = sqs.sendMessage.getCalls().map(call => call.args[0].MessageBody);
+            assert.deepEqual(bodies, ['msg1', 'msg2', 'msg3', 'msg4', 'msg5', 'msg6', 'msg7', 'msg8']);
+        });
+
+        it('should not create a state file when no message is processed', async function () {
+            // arrange
+            fs.writeFileSync(inputFilePath, '', 'utf-8');
+            const sqsGrep = new SqsGrep(parse(stateArgs()));
+
+            // act
+            const res = await sqsGrep.run();
+
+            // assert
+            assert.equal(res.qtyScanned, 0);
+            assert.equal(fs.existsSync(stateFilePath), false);
+        });
+
+        it('should log the saved progress', async function () {
+            // arrange
+            writeInputFile(2);
+            const logs = [];
+            const options = parse(stateArgs());
+            options.log = msg => logs.push(String(msg));
+            const sqsGrep = new SqsGrep(options);
+
+            // act
+            await sqsGrep.run();
+
+            // assert
+            assert.equal(/Progress saved to .*state\.json.*\(last processed message: .*2/.test(logs.join('\n')), true);
+        });
+
+        it('should log the saved progress when the last message lands on a periodic save', async function () {
+            // arrange: --maxMessages exactly on a --stateFileInterval boundary, so the
+            // final save is a no-op because the periodic save already persisted everything
+            writeInputFile(10);
+            const logs = [];
+            const options = parse(stateArgs(['--stateFileInterval=4', '--maxMessages=4']));
+            options.log = msg => logs.push(String(msg));
+            const sqsGrep = new SqsGrep(options);
+
+            // act
+            const res = await sqsGrep.run();
+
+            // assert
+            assert.equal(res.qtyMatched, 4);
+            assert.equal(readState().lastProcessedIndex, 4);
+            assert.equal(/Progress saved to .*state\.json.*\(last processed message: .*4/.test(logs.join('\n')), true,
+                'Should report the resume point even when nothing new was written');
+        });
+
+        it('should log the saved progress only once when interrupted', async function () {
+            // arrange
+            writeInputFile(10);
+            const logs = [];
+            const options = parse(stateArgs(['--stateFileInterval=1']));
+            options.log = msg => logs.push(String(msg));
+            const sqsGrep = new SqsGrep(options);
+            const scriptHook = sqsGrep.userScript.preProcessMessage;
+            sqsGrep.userScript.preProcessMessage = async message => {
+                await scriptHook(message);
+                if (message.Body === 'msg3') {
+                    sqsGrep.interrupt();
+                }
+            };
+
+            // act
+            await sqsGrep.run();
+
+            // assert
+            const saveLogs = logs.filter(msg => /Progress saved to/.test(msg));
+            assert.equal(saveLogs.length, 1, 'The resume point must be logged exactly once');
+            assert.equal(/last processed message: .*3/.test(saveLogs[0]), true);
+        });
+
+        it('should not log any progress when no message is processed', async function () {
+            // arrange
+            fs.writeFileSync(inputFilePath, '', 'utf-8');
+            const logs = [];
+            const options = parse(stateArgs());
+            options.log = msg => logs.push(String(msg));
+            const sqsGrep = new SqsGrep(options);
+
+            // act
+            await sqsGrep.run();
+
+            // assert
+            assert.equal(/Progress saved to/.test(logs.join('\n')), false);
+        });
+
+        it('should track the index without polluting the message object', async function () {
+            // arrange
+            writeInputFile(2);
+            const sqsGrep = new SqsGrep(parse(stateArgs(['--copyTo=B'])));
+            const seen = [];
+            sqsGrep.userScript.preProcessMessage = message => {
+                seen.push({keys: Object.keys(message), index: message[MESSAGE_INDEX]});
+            };
+
+            // act
+            await sqsGrep.run();
+
+            // assert
+            assert.deepEqual(seen.map(m => m.index), [1, 2], 'Messages must be indexed in file order');
+            seen.forEach(m => assert.deepEqual(m.keys, ['Body', 'MessageId'],
+                'The index must not become an enumerable message property'));
+            // The index lives in a Symbol, so it is never serialized to SQS/SNS or files
+            const sent = sqs.sendMessage.getCalls().map(call => call.args[0].MessageBody);
+            assert.deepEqual(sent, ['msg1', 'msg2']);
+        });
+    });
 });
+

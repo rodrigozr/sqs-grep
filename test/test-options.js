@@ -22,6 +22,19 @@ describe('Options', function () {
             const options = parseOptions(['--version']);
             assert.equal(options.maxRetries, 3, 'maxRetries should be 3 by default');
         });
+        it('should not set stateFile by default', function () {
+            const options = parseOptions(['--version']);
+            assert.equal(options.stateFile, undefined, 'stateFile should be undefined by default');
+        });
+        it('should default stateFileInterval to 100', function () {
+            const options = parseOptions(['--version']);
+            assert.equal(options.stateFileInterval, 100, 'stateFileInterval should be 100 by default');
+        });
+        it('should parse --stateFile and --stateFileInterval', function () {
+            const options = parseOptions(['--stateFile', 'state.json', '--stateFileInterval', '5']);
+            assert.equal(options.stateFile, 'state.json');
+            assert.equal(options.stateFileInterval, 5);
+        });
     });
     describe('#validateOptions()', function () {
         let logs, log;
@@ -98,6 +111,32 @@ describe('Options', function () {
             const options = parseOptions(['--inputFile', 'TestFile.txt', '--all', '--queue', 'TestQueue']);
             assert.equal(validateOptions(options, log), false);
             assert.equal(hasLog(/ERROR: You can't specify both .*--queue.* and .*--inputFile.*/), true);
+        });
+        it('should not allow --stateFile without --inputFile', function () {
+            const options = parseOptions(['--queue', 'TestQueue', '--all', '--stateFile', 'state.json']);
+            assert.equal(validateOptions(options, log), false);
+            assert.equal(hasLog(/ERROR: .*--stateFile.* can only be used together with .*--inputFile.*/), true);
+        });
+        it('should allow --stateFile with --inputFile', function () {
+            const options = parseOptions(['--inputFile', 'TestFile.txt', '--all', '--stateFile', 'state.json']);
+            assert.equal(validateOptions(options, log), true);
+            assert.equal(logs.length, 0);
+        });
+        it('should not allow invalid --stateFileInterval', function () {
+            const options = parseOptions(['--inputFile', 'TestFile.txt', '--all', '--stateFile', 'state.json', '--stateFileInterval', '0']);
+            assert.equal(validateOptions(options, log), false);
+            assert.equal(hasLog(/ERROR: Invalid .*--stateFileInterval.* value \(must be greater than 0\)/), true);
+        });
+        it('should not allow missing --stateFileInterval', function () {
+            const options = parseOptions(['--inputFile', 'TestFile.txt', '--all', '--stateFile', 'state.json']);
+            options.stateFileInterval = undefined;
+            assert.equal(validateOptions(options, log), false);
+            assert.equal(hasLog(/ERROR: Invalid .*--stateFileInterval.* value \(must be greater than 0\)/), true);
+        });
+        it('should ignore an invalid --stateFileInterval when --stateFile is not set', function () {
+            const options = parseOptions(['--inputFile', 'TestFile.txt', '--all', '--stateFileInterval', '0']);
+            assert.equal(validateOptions(options, log), true);
+            assert.equal(logs.length, 0);
         });
         [['--all'], ['--body', 'Test'], ['--attribute', 'key=val']].forEach(arg => {
             it(`should pass with ${arg[0]}`, function () {

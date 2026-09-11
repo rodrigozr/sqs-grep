@@ -8,6 +8,14 @@ const lineByLine = require('n-readlines');
 const Bottleneck = require('bottleneck');
 require('node-gzip');
 const { validateOptions, printMatchingRules, parseOptions } = require('./options');
+const { StateFile } = require('./state-file');
+
+/**
+ * Symbol used to attach the 1-based index of a message read from an --inputFile,
+ * without polluting the message object itself (which may be sent to SQS/SNS or
+ * inspected by user scripts).
+ */
+const MESSAGE_INDEX = Symbol('sqsGrepMessageIndex');
 
 /**
  * Main sqs-grep executor class
@@ -38,6 +46,8 @@ class SqsGrep {
         this.emptyReceives = 0;
         this.qtyScanned = 0;
         this.qtyMatched = 0;
+        this.messageIndex = 0;
+        this.stateFile = null;
         this._configureThrottling();
         this.userScript = this._loadUserScript();
     }
@@ -84,13 +94,17 @@ class SqsGrep {
                     // Process received messages
                     for (let message of res.Messages) {
                         await this.userScript.preProcessMessage(message);
-                        if (this._isMessageMatched(message)) {
+                        const matched = this._isMessageMatched(message);
+                        if (matched) {
                             this.qtyMatched++;
                             await this.userScript.preProcessMatchedMessage(message);
                             await this._processMatchedSqsMessage(message);
-                            if (!keepRunning()) {
-                                break;
-                            }
+                        }
+                        // The message is fully processed at this point, so it does
+                        // not need to be scanned again by a resumed execution
+                        this._markMessageProcessed(message);
+                        if (matched && !keepRunning()) {
+                            break;
                         }
                     }
                 } catch (error) {
@@ -100,7 +114,11 @@ class SqsGrep {
             }
         });
         // Wait for all parallel executions to complete
-        await Promise.all(promises);
+        try {
+            await Promise.all(promises);
+        } finally {
+            this._saveAndLogState();
+        }
 
         // Print the status
         this.log(chalk`\nMessages scanned: {green ${this.qtyScanned}}\nMessages matched: {green ${this.qtyMatched}}`);
@@ -119,6 +137,39 @@ class SqsGrep {
      */
     interrupt() {
         this.running = false;
+        // Persist the progress right away, as we may not have the chance later.
+        // This is silent on purpose: the resume point is logged once, at the end
+        // of the execution.
+        if (this.stateFile) {
+            this.stateFile.save();
+        }
+    }
+
+    /**
+     * Marks a message read from an --inputFile as fully processed, so that a
+     * future execution using the same --stateFile can skip it
+     * @param {Object} message message which was processed
+     */
+    _markMessageProcessed(message) {
+        if (this.stateFile) {
+            this.stateFile.markProcessed(message[MESSAGE_INDEX]);
+        }
+    }
+
+    /**
+     * Saves the --stateFile, when it is enabled, and logs the resume point.
+     *
+     * The log does not depend on this specific call having written to disk, as
+     * the progress may have already been saved by a periodic save.
+     */
+    _saveAndLogState() {
+        if (!this.stateFile) {
+            return;
+        }
+        this.stateFile.save();
+        if (this.stateFile.lastProcessedIndex > 0) {
+            this.log(chalk`Progress saved to '{green ${this.options.stateFile}}' (last processed message: {green ${this.stateFile.lastProcessedIndex}}).`);
+        }
     }
 
     /**
@@ -205,8 +256,14 @@ class SqsGrep {
     async _receiveMessage() {
         if (this.options.inputFile) {
             const message = this.inputFileReader.next();
-            const Messages = message ? [JSON.parse(message)] : [];
-            return { Messages };
+            if (!message) {
+                return { Messages: [] };
+            }
+            const parsedMessage = JSON.parse(message);
+            // Note: there is no 'await' before this increment, so it is atomic
+            // even when multiple parallel pollers are running
+            parsedMessage[MESSAGE_INDEX] = ++this.messageIndex;
+            return { Messages: [parsedMessage] };
         } else {
             const elapsedSeconds = parseInt((new Date().getTime() - this.startedAt) / 1000);
             const res = await this.sqs.receiveMessage({
@@ -272,6 +329,8 @@ class SqsGrep {
     async _connectToQueues() {
         if  (this.options.inputFile) {
             this.inputFileReader = new lineByLine(this.options.inputFile);
+            this.messageIndex = 0;
+            this._resumeFromStateFile();
         } else {
             this.options.sourceQueueUrl = await this._connectToQueue(this.options.queue);
         }
@@ -290,6 +349,35 @@ class SqsGrep {
                 TopicArn: this.options.publishTo,
             });
         }
+    }
+
+    /**
+     * Initializes the --stateFile (when set) and skips all messages from the
+     * --inputFile which were already processed by a previous execution
+     */
+    _resumeFromStateFile() {
+        if (!this.options.stateFile) {
+            return;
+        }
+        this.stateFile = new StateFile({
+            filePath: this.options.stateFile,
+            inputFile: this.options.inputFile,
+            flushInterval: this.options.stateFileInterval,
+            log: this.log,
+        });
+        const resumeFrom = this.stateFile.load();
+        if (!resumeFrom) {
+            return;
+        }
+        this.log(chalk`Resuming from message {green ${resumeFrom + 1}} - skipping the first {green ${resumeFrom}} message(s) already processed...`);
+        let skipped = 0;
+        while (skipped < resumeFrom && this.inputFileReader.next()) {
+            skipped++;
+        }
+        if (skipped < resumeFrom) {
+            this.log(chalk`{yellow WARNING: The input file only contains ${skipped} message(s), but the state file says that ${resumeFrom} were already processed.}`);
+        }
+        this.messageIndex = skipped;
     }
 
     /**
@@ -494,4 +582,4 @@ class SqsGrep {
     }
 }
 
-module.exports = { SqsGrep };
+module.exports = { SqsGrep, MESSAGE_INDEX };
