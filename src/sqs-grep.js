@@ -203,8 +203,9 @@ class SqsGrep {
 
             // This function will require modules using the main entry point paths
             // which allows things like sqs_grep_require('node-gzip') in scripts
+            const requirePaths = SqsGrep._getUserScriptRequirePaths(require.main);
             global.sqs_grep_require = function (id) {
-                return localRequire(localResolve(id, { paths: require.main.paths }));
+                return localRequire(localResolve(id, { paths: requirePaths }));
             };
 
             const scriptFile = path.resolve(this.options.scriptFile);
@@ -220,6 +221,21 @@ class SqsGrep {
             }
         }
         return hooks;
+    }
+
+    /**
+     * Retrieves the module resolution paths used by 'sqs_grep_require' in
+     * user-provided script files.
+     *
+     * Modules are resolved from the application entry point, so that scripts can
+     * require modules bundled with sqs-grep. The entry point is not always a
+     * CommonJS module (some test runners load it as an ES module), in which case
+     * there is no main module and we resolve from this module instead.
+     * @param {*} mainModule the main module ('require.main'), when available
+     * @returns {Array} module resolution paths
+     */
+    static _getUserScriptRequirePaths(mainModule) {
+        return mainModule ? mainModule.paths : module.paths;
     }
 
     /**

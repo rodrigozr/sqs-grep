@@ -26,7 +26,8 @@ async function main() {
  */
 async function fillInputCredentials(options) {
     if (options.inputCredentials) {
-        /* eslint-disable require-atomic-updates */
+        // Note: assigning to 'options' after each await is intentional here, as the
+        // prompts must be answered in order and nothing else runs concurrently
         options.accessKeyId = await prompt('AWS access key id:');
         options.secretAccessKey = await prompt('AWS secret access key:');
     }

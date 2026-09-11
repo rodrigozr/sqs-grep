@@ -1015,6 +1015,20 @@ describe('SqsGrep', function () {
             assert.equal(res.qtyMatched, 2);
         });
     });
+    describe('#_getUserScriptRequirePaths()', function () {
+        it('should resolve from the main entry point when it is a CommonJS module', function () {
+            const paths = SqsGrep._getUserScriptRequirePaths({paths: ['/fake/entry/node_modules']});
+            assert.deepEqual(paths, ['/fake/entry/node_modules']);
+        });
+        [undefined, null].forEach(mainModule => {
+            it(`should fall back to its own paths when the main module is ${String(mainModule)}`, function () {
+                // Happens when the entry point is not a CommonJS module
+                const paths = SqsGrep._getUserScriptRequirePaths(mainModule);
+                assert.equal(Array.isArray(paths), true);
+                assert.equal(paths.some(p => p.endsWith('node_modules')), true);
+            });
+        });
+    });
     describe('--stateFile', function () {
         let tempDir, stateFilePath, inputFilePath;
         const readState = () => JSON.parse(fs.readFileSync(stateFilePath, 'utf-8'));
