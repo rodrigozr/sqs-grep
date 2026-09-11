@@ -5,6 +5,10 @@ Script files are [NodeJS modules](https://www.w3schools.com/nodejs/nodejs_module
 This means that you should **NEVER** use scripts from unknown sources, since those scripts will have
 full access to your computer.
 
+The `sqs-grep` invocations below also work when running from NPM without installing anything, by
+replacing `sqs-grep` with `npx sqs-grep` (`--scriptFile` paths are resolved relative to the current
+directory, and `sqs_grep_require` keeps working, as described below).
+
 # User script definition
 
 ```js

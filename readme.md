@@ -9,8 +9,27 @@ Powerful command-line tool used to scan thru an AWS SQS queue and find messages 
 It can also delete the matching messages, copy/move them to another SQS queue and publish them to an SNS topic.
 
 ## Installation
-* [Download pre-built binaries here](https://github.com/rodrigozr/sqs-grep/releases). The `sqs-grep` tool is distributed as a single executable, so feel free to extract it anywhere and use it from there.
-* If you use NPM, you can also install it using the following command: `npm i -g sqs-grep`
+Install it globally with NPM:
+```sh
+$ npm i -g sqs-grep
+```
+
+Or skip the installation entirely and run it straight from NPM with `npx`:
+```sh
+$ npx sqs-grep --queue MyQueue --body "Error"
+```
+`npx` downloads the latest version on first use and caches it, which makes it a convenient way to
+run `sqs-grep` on a machine you would rather not install anything on (a bastion host or a CI job,
+for example). Every example in this document works the same way with `npx sqs-grep` in place of
+`sqs-grep`. To pin a specific version, pass it in the package name: `npx sqs-grep@1.19.0 --help`.
+
+> **Pre-compiled binaries are no longer distributed as of v1.19.** Earlier releases shipped
+> single-executable builds for Linux, MacOS and Windows, produced with
+> [pkg](https://github.com/vercel/pkg), which has since been deprecated. Binaries attached to
+> releases up to v1.18.3 remain available on the
+> [releases page](https://github.com/rodrigozr/sqs-grep/releases), but they will not receive any
+> further updates. Please install from NPM instead, which is now the only supported distribution
+> channel.
 
 ## Features
 * Find messages matching (or NOT matching) a regular expression
@@ -22,7 +41,7 @@ It can also delete the matching messages, copy/move them to another SQS queue an
 * Publish matched messages to an SNS topic (or re-publish to the original topic if the message originally came from SNS)
 * Delete matched messages
 * Parallel scan for higher throughput
-* Cross-platform, with pre-built binaries for Linux, MacOS and Windows
+* Cross-platform: runs anywhere Node.js runs (Linux, MacOS and Windows)
 * Supports FIFO queues for both sources and targets
 * [Custom processing scripts](user-scripts.md)
 

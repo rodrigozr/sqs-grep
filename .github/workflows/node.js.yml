@@ -39,14 +39,6 @@ jobs:
     - name: Create github release
       if: startsWith(github.event.ref, 'refs/tags/v')
       uses: softprops/action-gh-release@v1
-      with:
-        files: |
-          build/sqs-grep-linux-x64.tbz
-          build/sqs-grep-linux-arm64.tbz
-          build/sqs-grep-macos-x64.tbz
-          build/sqs-grep-macos-arm64.tbz
-          build/sqs-grep-win-x64.zip
-          build/sqs-grep-win-arm64.zip
 
     # Publish to NPM Registry
     - name: Publish to NPM Registry

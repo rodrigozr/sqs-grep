@@ -197,7 +197,8 @@ class SqsGrep {
             preProcessMatchedMessage: emptyHook,
         };
         if (this.options.scriptFile) {
-            // This is just a trick to avoid 'pkg' complaining about dynamic requires
+            // These are kept in local variables so that bundlers do not try to
+            // statically analyse the dynamic requires below
             const localRequire = require;
             const localResolve = require.resolve;
 
