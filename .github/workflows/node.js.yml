@@ -23,9 +23,9 @@ jobs:
       id-token: write
 
     steps:
-    - uses: actions/checkout@v4
+    - uses: actions/checkout@v7
     - name: Use Node.js 24
-      uses: actions/setup-node@v4
+      uses: actions/setup-node@v7
       with:
         # Trusted publishing (OIDC) requires Node >= 22.14.0 and npm >= 11.5.1
         node-version: 24.21.0
