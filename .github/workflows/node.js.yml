@@ -47,7 +47,7 @@ jobs:
     # Create github release
     - name: Create github release
       if: startsWith(github.event.ref, 'refs/tags/v')
-      uses: softprops/action-gh-release@v1
+      uses: softprops/action-gh-release@v3
 
     # Publish to NPM Registry
     - name: Publish to NPM Registry
