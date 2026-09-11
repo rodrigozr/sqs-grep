@@ -52,4 +52,4 @@ jobs:
     # Publish to NPM Registry
     - name: Publish to NPM Registry
       if: startsWith(github.event.ref, 'refs/tags/v')
-      run: npm publish --access public
+      run: npm publish --provenance --access public
