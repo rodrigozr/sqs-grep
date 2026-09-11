@@ -43,6 +43,4 @@ jobs:
     # Publish to NPM Registry
     - name: Publish to NPM Registry
       if: startsWith(github.event.ref, 'refs/tags/v')
-      run: npm publish
-      env:
-        NODE_AUTH_TOKEN: ${{secrets.npm_token}}
+      run: npm publish --access public
