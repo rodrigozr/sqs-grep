@@ -18,6 +18,8 @@ jobs:
     # GitHub does not mint an OIDC token, so 'npm publish' cannot authenticate and
     # fails with a "404 Not Found - PUT" from the registry.
     # 'contents: write' is needed by the "Create github release" step below.
+    # Note: the Docker image is built by the 'docker' job below, which only runs
+    # once this job has succeeded.
     permissions:
       contents: write
       id-token: write
@@ -53,3 +55,17 @@ jobs:
     - name: Publish to NPM Registry
       if: startsWith(github.event.ref, 'refs/tags/v')
       run: npm publish --provenance --access public
+
+  # Build the Docker image and, on version tags, publish it to Docker Hub. This
+  # runs as a separate job so that it only ever starts after the build above has
+  # succeeded, which also means an image is never published for a failed release.
+  docker:
+    needs: build
+    uses: ./.github/workflows/docker.yml
+    # A called workflow cannot be granted more than the calling job, so the
+    # permissions its buildx attestations need are declared here as well.
+    permissions:
+      contents: read
+      id-token: write
+    secrets:
+      DOCKERHUB_TOKEN: ${{ secrets.DOCKERHUB_TOKEN }}

@@ -1,0 +1,8 @@
+# Only package.json, package-lock.json, tsconfig.json and src/ are needed to
+# build the image; everything else would just slow the build down or leak
+# local state into the context.
+*
+!package.json
+!package-lock.json
+!tsconfig.json
+!src/

@@ -19,14 +19,14 @@
     "node": ">=22.12.0"
   },
   "scripts": {
+    "start": "node dist/main.js",
     "build": "tsc -p tsconfig.json",
     "build:test": "tsc -p tsconfig.test.json",
     "clean": "rm -rf dist build coverage",
     "lint": "oxlint src test",
-    "test": "npm run test-only && npm run build",
-    "test-only": "npm run lint && npm run build:test && c8 mocha",
+    "test": "npm run lint && npm run build:test && c8 mocha",
     "test:watch": "mocha --require tsx --spec 'test/**/*.test.ts' --watch --watch-files src,test",
-    "integration-test": "RUN_INTEGRATION_TESTS=1 npm run test-only",
+    "integration-test": "RUN_INTEGRATION_TESTS=1 npm test",
     "prepack": "npm run clean && npm run build",
     "snyk-ci": "snyk test && snyk monitor",
     "snyk-test": "snyk test",

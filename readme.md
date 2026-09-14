@@ -25,6 +25,39 @@ for example). Every example in this document works the same way with `npx sqs-gr
 
 `sqs-grep` requires **Node.js 22.12 or later**.
 
+### Running as a container
+Official images are published to Docker Hub as
+[rodrigozr/sqs-grep](https://hub.docker.com/r/rodrigozr/sqs-grep) for `linux/amd64` and
+`linux/arm64`, so `sqs-grep` can run without a local Node.js installation:
+```sh
+$ docker run --rm rodrigozr/sqs-grep --help
+```
+Each release is tagged with its full version plus the moving `2.3`, `2` and `latest` tags, so pin
+whichever you prefer: `rodrigozr/sqs-grep:2.0.0`, `rodrigozr/sqs-grep:2` and so on.
+
+You can also build the image yourself from the `Dockerfile` in the repository (based on
+`node:lts-alpine`) with Docker or any compatible tool such as Finch or Podman:
+```sh
+$ docker build -t sqs-grep .
+```
+
+The container runs as an unprivileged user with `/work` as its working directory. Mount the current
+directory there to exchange files with it (`--inputFile`, `--outputFile`, `--stateFile` and
+`--scriptFile` all resolve relative to it), and pass AWS credentials either as environment variables
+or by mounting your AWS configuration read-only:
+```sh
+# Credentials from the environment
+$ docker run --rm -e AWS_ACCESS_KEY_ID -e AWS_SECRET_ACCESS_KEY -e AWS_SESSION_TOKEN \
+    sqs-grep --queue MyQueue --region us-east-1 --body Error
+
+# Credentials from ~/.aws, and files exchanged through the current directory
+$ docker run --rm -v ~/.aws:/home/node/.aws:ro -e AWS_PROFILE -v "$PWD:/work" \
+    sqs-grep --queue MyQueue --all --outputFile messages.txt
+$ docker run --rm -v "$PWD:/work" \
+    sqs-grep --inputFile messages.txt --all --scriptFile my-script.js
+```
+Add `-t` to get coloured output when running interactively.
+
 > **Pre-compiled binaries are no longer distributed as of v1.19.** Earlier releases shipped
 > single-executable builds for Linux, MacOS and Windows, produced with
 > [pkg](https://github.com/vercel/pkg), which has since been deprecated. Binaries attached to
