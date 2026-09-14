@@ -1,14 +1,110 @@
-const commandLineArgs = require('command-line-args');
-const commandLineUsage = require('command-line-usage');
-const chalk = require('chalk');
-const {version} = require('../package.json');
+import commandLineArgs from 'command-line-args';
+import commandLineUsage from 'command-line-usage';
+import chalk from 'chalk';
+import fs from 'fs';
+import {dirname, join} from 'path';
+import type {Logger, SqsClient, SnsClient} from './types.js';
+
+/**
+ * Reads the version of this package from the nearest `package.json`, walking up
+ * from the given directory. The code may run from `src/` (development), `dist/`
+ * (published) or a test build directory, which all sit at different depths,
+ * hence the search.
+ * @param startDir directory to start searching from (defaults to this file's directory)
+ * @returns the package version
+ * @internal
+ */
+export function readPackageVersion(startDir: string = import.meta.dirname): string {
+    let dir = startDir;
+    for (;;) {
+        try {
+            return (JSON.parse(fs.readFileSync(join(dir, 'package.json'), 'utf-8')) as {version: string}).version;
+        } catch {
+            const parent = dirname(dir);
+            if (parent === dir) {
+                throw new Error(`Could not find the sqs-grep package.json above '${startDir}'`);
+            }
+            dir = parent;
+        }
+    }
+}
+
+const version = readPackageVersion();
+
+/**
+ * A `--attribute` matching rule
+ */
+export interface AttributeMatcher {
+    /** Name of the message attribute */
+    attr: string;
+    /** Regular expression the attribute value must match */
+    regexp: RegExp;
+}
+
+/**
+ * All sqs-grep options: the parsed command-line arguments, plus a few
+ * programmatic extras (`sqs`, `sns`, `log`) and values resolved at runtime.
+ */
+export interface SqsGrepOptions {
+    // Main
+    queue?: string;
+    region: string;
+    body?: RegExp;
+    all?: boolean;
+    attribute?: AttributeMatcher[];
+    delete?: boolean;
+    moveTo?: string;
+    copyTo?: string;
+    publishTo?: string;
+    republish?: boolean;
+    redrive?: boolean;
+    // Credentials
+    inputCredentials?: boolean;
+    accessKeyId?: string;
+    secretAccessKey?: string;
+    sessionToken?: string;
+    // Other
+    negate: boolean;
+    timeout: number;
+    maxMessages: number;
+    parallel: number;
+    silent: boolean;
+    full: boolean;
+    stripAttributes: boolean;
+    outputFile?: string;
+    inputFile?: string;
+    stateFile?: string;
+    stateFileInterval: number;
+    scriptFile?: string;
+    emptyReceives: number;
+    wait: number;
+    endpointUrl?: string;
+    maxTPS: number;
+    maxRetries: number;
+    verbose: boolean;
+    help: boolean;
+    version: boolean;
+
+    // Programmatic extras (not available from the command-line)
+    /** Custom SQS client (defaults to the AWS SDK client) */
+    sqs?: SqsClient;
+    /** Custom SNS client (defaults to the AWS SDK client) */
+    sns?: SnsClient;
+    /** Custom logger (defaults to console.log) */
+    log?: Logger;
+
+    // Resolved at runtime while connecting to the queues
+    sourceQueueUrl?: string;
+    moveToQueueUrl?: string;
+    copyToQueueUrl?: string;
+}
 
 /**
  * Parses a command-line "--attribute" argument into an attribute matching definition
- * @param {String} str the argument to parse
- * @returns {Object} {attr: attribute name, regexp: regular expression match}
+ * @param str the argument to parse
+ * @returns {attr: attribute name, regexp: regular expression match}
  */
-const parseAttribute = str => ({
+const parseAttribute = (str: string): AttributeMatcher => ({
     attr: str.substring(0, str.indexOf('=')),
     regexp: RegExp(str.substring(str.indexOf('=') + 1))
 });
@@ -16,7 +112,7 @@ const parseAttribute = str => ({
 /**
  * All command-line option definitions
  */
-const optionDefinitions = [
+const optionDefinitions: (commandLineUsage.OptionDefinition & commandLineArgs.OptionDefinition)[] = [
     // Main
     { name: 'queue', alias: 'q', description: 'Source SQS Queue name or URL', group: 'main' },
     { name: 'region', alias: 'r', defaultValue: 'us-east-1', description: 'AWS region name', group: 'main' },
@@ -60,7 +156,7 @@ const optionDefinitions = [
 /**
  * Help text definition
  */
-const usage = [
+const usage: commandLineUsage.Section[] = [
     {
         header: 'sqs-grep',
         content: 'Command-line tool used to scan thru an AWS SQS queue and find messages matching a certain criteria'
@@ -106,27 +202,27 @@ const usage = [
 
 /**
  * Parses command-line arguments
- * @param {Array} argv optional arguments
- * @returns {Object} parsed options
+ * @param argv optional arguments (defaults to the process arguments)
+ * @returns parsed options
  */
-function parseOptions(argv) {
-    const options = commandLineArgs(optionDefinitions, {argv})._all;
+export function parseOptions(argv?: string[]): SqsGrepOptions {
+    const options = commandLineArgs(optionDefinitions, {argv})._all as SqsGrepOptions;
     return options;
 }
 
 /**
  * Prints the application version to the console
- * @param {Function} log logger to use
+ * @param log logger to use
  */
-function showVersion(log) {
+export function showVersion(log: Logger): void {
     log(`sqs-grep version ${version}`);
 }
 
 /**
  * Prints the command-line help to the console
- * @param {Function} log logger to use
+ * @param log logger to use
  */
-function showHelp(log) {
+export function showHelp(log: Logger): void {
     showVersion(log);
     log(commandLineUsage(usage));
 }
@@ -134,14 +230,14 @@ function showHelp(log) {
 /**
  * Validates that all command-line options are valid and we can proceed
  * with the program execution.
- * 
+ *
  * If the options are not valid, this will print the error and usage help
  * and will return false.
- * @param {*} options parsed options
- * @param {Function} log logger to use
- * @returns {Boolean} true if we can proceed
+ * @param options parsed options
+ * @param log logger to use
+ * @returns true if we can proceed
  */
-function validateOptions(options, log) {
+export function validateOptions(options: SqsGrepOptions, log: Logger): boolean {
     if (options.help) {
         showHelp(log);
         return false;
@@ -150,45 +246,45 @@ function validateOptions(options, log) {
         showVersion(log);
         return false;
     }
-    const error = msg => {
+    const error = (msg: string): false => {
         log(msg);
-        log(chalk`{italic (See all options by specifying {bold --help} in the command-line)}`);
+        log(chalk.italic(`(See all options by specifying ${chalk.bold(`--help`)} in the command-line)`));
         return false;
     };
     if (!options.queue && !options.inputFile) {
-        return error(chalk`{red ERROR: You must specify {bold --queue} or {bold --inputFile}}`);
+        return error(chalk.red(`ERROR: You must specify ${chalk.bold(`--queue`)} or ${chalk.bold(`--inputFile`)}`));
     }
     if (options.queue && options.inputFile) {
-        return error(chalk`{red ERROR: You can't specify both {bold --queue} and {bold --inputFile} (choose one or the other)}`);
+        return error(chalk.red(`ERROR: You can't specify both ${chalk.bold(`--queue`)} and ${chalk.bold(`--inputFile`)} (choose one or the other)`));
     }
     if (!options.all && !options.body && (!options.attribute || !options.attribute.length)) {
-        return error(chalk`{red ERROR: You must specify at least one of {bold --all}, {bold --body}, or {bold --attribute}}`);
+        return error(chalk.red(`ERROR: You must specify at least one of ${chalk.bold(`--all`)}, ${chalk.bold(`--body`)}, or ${chalk.bold(`--attribute`)}`));
     }
     if (options.copyTo && options.delete) {
-        return error(chalk`{red ERROR: You can't specify both {bold --copyTo} and {bold --delete}! Use {bold --moveTo} instead}`);
+        return error(chalk.red(`ERROR: You can't specify both ${chalk.bold(`--copyTo`)} and ${chalk.bold(`--delete`)}! Use ${chalk.bold(`--moveTo`)} instead`));
     }
     if (options.moveTo && options.redrive) {
-        return error(chalk`{red ERROR: You can't specify both {bold --moveTo} and {bold --redrive}!}`);
+        return error(chalk.red(`ERROR: You can't specify both ${chalk.bold(`--moveTo`)} and ${chalk.bold(`--redrive`)}!`));
     }
     if (!(options.parallel > 0)) {
-        return error(chalk`{red ERROR: Invalid {bold --parallel} value (must be greater than 0)}`);
+        return error(chalk.red(`ERROR: Invalid ${chalk.bold(`--parallel`)} value (must be greater than 0)`));
     }
     if (!(options.timeout > 0)) {
-        return error(chalk`{red ERROR: Invalid {bold --timeout} value (must be greater than 0)}`);
+        return error(chalk.red(`ERROR: Invalid ${chalk.bold(`--timeout`)} value (must be greater than 0)`));
     }
     if (options.inputFile) {
         if (options.delete) {
-            return error(chalk`{red ERROR: You can't specify both {bold --inputFile} and {bold --delete}!}`);
+            return error(chalk.red(`ERROR: You can't specify both ${chalk.bold(`--inputFile`)} and ${chalk.bold(`--delete`)}!`));
         }
         if (options.moveTo) {
-            return error(chalk`{red ERROR: You can't specify both {bold --inputFile} and {bold --moveTo}! Use {bold --copyTo} instead}`);
+            return error(chalk.red(`ERROR: You can't specify both ${chalk.bold(`--inputFile`)} and ${chalk.bold(`--moveTo`)}! Use ${chalk.bold(`--copyTo`)} instead`));
         }
     }
     if (options.stateFile && !options.inputFile) {
-        return error(chalk`{red ERROR: {bold --stateFile} can only be used together with {bold --inputFile}!}`);
+        return error(chalk.red(`ERROR: ${chalk.bold(`--stateFile`)} can only be used together with ${chalk.bold(`--inputFile`)}!`));
     }
     if (options.stateFile && !(options.stateFileInterval > 0)) {
-        return error(chalk`{red ERROR: Invalid {bold --stateFileInterval} value (must be greater than 0)}`);
+        return error(chalk.red(`ERROR: Invalid ${chalk.bold(`--stateFileInterval`)} value (must be greater than 0)`));
     }
     if (options.outputFile) {
         options.full = true;
@@ -197,11 +293,11 @@ function validateOptions(options, log) {
 }
 
 /**
- * prints the matching rules for the given parsed options
- * @param {*} options parsed options
- * @param {Function} log logger to use
+ * Prints the matching rules for the given parsed options
+ * @param options parsed options
+ * @param log logger to use
  */
-function printMatchingRules(options, log) {
+export function printMatchingRules(options: SqsGrepOptions, log: Logger): void {
     const containing = options.negate ? chalk.red('not containing') : 'containing';
     const match = (options.moveTo && options.copyTo) ? chalk.green('copy and move') :
         options.moveTo ? chalk.green('move') :
@@ -210,22 +306,15 @@ function printMatchingRules(options, log) {
         'match';
     const queue = options.inputFile ? 'file' : 'queue';
     if (options.all) {
-        log(chalk`Will ${match} {bold ALL} messages in the ${queue}.`);
+        log(`Will ${match} ${chalk.bold(`ALL`)} messages in the ${queue}.`);
         return;
     }
     if (options.body) {
-        log(chalk`Will ${match} messages ${containing} the RegExp {green ${options.body}} in its body.`);
+        log(`Will ${match} messages ${containing} the RegExp ${chalk.green(options.body)} in its body.`);
     }
     if (options.attribute) {
-        for (let attribute of options.attribute) {
-            log(chalk`Will ${match} messages containing an attribute named '{green ${attribute.attr}}' with its value ${containing} the RegExp {green ${attribute.regexp}}.`);
+        for (const attribute of options.attribute) {
+            log(`Will ${match} messages containing an attribute named '${chalk.green(attribute.attr)}' with its value ${containing} the RegExp ${chalk.green(attribute.regexp)}.`);
         }
     }
 }
-module.exports = {
-    parseOptions,
-    showVersion,
-    showHelp,
-    validateOptions,
-    printMatchingRules,
-};

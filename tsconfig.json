@@ -1,0 +1,27 @@
+{
+  "compilerOptions": {
+    // Node 22 supports all of ES2023 natively, so nothing needs down-levelling
+    "target": "ES2023",
+    "lib": ["ES2023"],
+    // The package is published as ES modules (see "type": "module" in package.json).
+    // User-provided scripts (see user-scripts.md) remain plain CommonJS files: they
+    // are loaded through `module.createRequire()` at runtime.
+    "module": "nodenext",
+    "moduleResolution": "nodenext",
+    "esModuleInterop": true,
+    "rootDir": "src",
+    "outDir": "dist",
+    "declaration": true,
+    "declarationMap": true,
+    "sourceMap": true,
+    "strict": true,
+    "noImplicitOverride": true,
+    "noFallthroughCasesInSwitch": true,
+    "noUnusedLocals": true,
+    "noUnusedParameters": true,
+    "forceConsistentCasingInFileNames": true,
+    "skipLibCheck": true,
+    "types": ["node"]
+  },
+  "include": ["src/**/*.ts"]
+}

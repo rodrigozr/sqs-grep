@@ -1,0 +1,15 @@
+{
+  // Compiles the sources AND the tests into `build/` for the test run, so that
+  // the tests exercise exactly the JavaScript `tsc` emits (the same output that
+  // is published from `dist/`), and coverage is remapped through the precise
+  // source maps `tsc` produces. `tsconfig.json` remains the published build.
+  "extends": "./tsconfig.json",
+  "compilerOptions": {
+    "rootDir": ".",
+    "outDir": "build",
+    "declaration": false,
+    "declarationMap": false,
+    "types": ["node", "mocha"]
+  },
+  "include": ["src/**/*.ts", "test/**/*.ts"]
+}

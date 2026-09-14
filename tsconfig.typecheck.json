@@ -1,0 +1,11 @@
+{
+  // Used by `npm run typecheck` and by editors: type-checks the tests as well
+  // as the sources, without emitting anything. `tsconfig.json` is the build.
+  "extends": "./tsconfig.json",
+  "compilerOptions": {
+    "noEmit": true,
+    "rootDir": ".",
+    "types": ["node", "mocha"]
+  },
+  "include": ["src/**/*.ts", "test/**/*.ts", "eslint.config.js"]
+}

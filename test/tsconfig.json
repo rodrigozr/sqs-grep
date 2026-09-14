@@ -1,0 +1,7 @@
+{
+  // Lets tooling that discovers the nearest tsconfig per file (the type-aware
+  // linter, editors) type-check the tests with the mocha globals available.
+  // The actual builds use ../tsconfig.json (published) and ../tsconfig.test.json.
+  "extends": "../tsconfig.typecheck.json",
+  "include": ["../src/**/*.ts", "./**/*.ts"]
+}

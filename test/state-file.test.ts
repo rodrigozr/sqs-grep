@@ -1,16 +1,15 @@
-/* eslint-disable no-undef */
-const assert = require('assert');
-const sinon = require('sinon');
-const fs = require('fs');
-const os = require('os');
-const path = require('path');
-const { StateFile, STATE_FILE_VERSION, DEFAULT_FLUSH_INTERVAL } = require('../src/state-file');
+import assert from 'assert';
+import sinon from 'sinon';
+import fs from 'fs';
+import os from 'os';
+import path from 'path';
+import {StateFile, STATE_FILE_VERSION, DEFAULT_FLUSH_INTERVAL, type StateFileParams, type StateFileContents} from '../src/state-file.js';
 
 describe('StateFile', function () {
-    let tempDir, stateFilePath, inputFilePath, logs, log;
-    const hasLog = regexp => regexp.test(logs.map(s => s.toString()).join('\n'));
-    const readState = () => JSON.parse(fs.readFileSync(stateFilePath, 'utf-8'));
-    const create = params => new StateFile({
+    let tempDir: string, stateFilePath: string, inputFilePath: string, logs: unknown[], log: sinon.SinonStub;
+    const hasLog = (regexp: RegExp): boolean => regexp.test(logs.map(s => String(s)).join('\n'));
+    const readState = (): StateFileContents => JSON.parse(fs.readFileSync(stateFilePath, 'utf-8'));
+    const create = (params: Partial<StateFileParams> = {}): StateFile => new StateFile({
         filePath: stateFilePath,
         inputFile: inputFilePath,
         log,
@@ -22,7 +21,7 @@ describe('StateFile', function () {
         stateFilePath = path.join(tempDir, 'state.json');
         inputFilePath = path.join(tempDir, 'queue.jsonl');
         logs = [];
-        log = sinon.stub().callsFake(function () { logs.push(...arguments) });
+        log = sinon.stub().callsFake((...args: unknown[]) => { logs.push(...args) });
     });
     afterEach(function () {
         sinon.restore();
@@ -118,7 +117,7 @@ describe('StateFile', function () {
         });
         it('should raise unexpected file system errors', function () {
             const state = create({filePath: tempDir});
-            assert.throws(() => state.load(), err => err.code === 'EISDIR');
+            assert.throws(() => state.load(), (err: NodeJS.ErrnoException) => err.code === 'EISDIR');
         });
     });
 
@@ -162,7 +161,7 @@ describe('StateFile', function () {
             assert.equal(state.markProcessed(6), true);
             assert.equal(state.lastProcessedIndex, 6);
         });
-        [undefined, null, 'abc', NaN, Infinity, {}].forEach(index => {
+        [undefined, null, 'abc', NaN, Infinity, {}].forEach((index: unknown) => {
             it(`should ignore the invalid index ${String(index)}`, function () {
                 const state = create({flushInterval: 1000});
                 assert.equal(state.markProcessed(index), false);
@@ -258,7 +257,7 @@ describe('StateFile', function () {
         it('should raise unexpected file system errors', function () {
             const state = create({filePath: path.join(tempDir, 'missing-dir', 'state.json'), flushInterval: 1000});
             state.markProcessed(1);
-            assert.throws(() => state.save(), err => err.code === 'ENOENT');
+            assert.throws(() => state.save(), (err: NodeJS.ErrnoException) => err.code === 'ENOENT');
         });
     });
 

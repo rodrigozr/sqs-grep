@@ -1,14 +1,13 @@
 #! /usr/bin/env node
 
-const process = require('process');
-const prompt = require('password-prompt');
-const {parseOptions} = require('./options');
-const {SqsGrep} = require('./sqs-grep');
+import prompt from 'password-prompt';
+import {parseOptions, type SqsGrepOptions} from './options.js';
+import {SqsGrep} from './sqs-grep.js';
 
 /**
  * Main processing loop
  */
-async function main() {
+async function main(): Promise<void> {
     const options = parseOptions();
     await fillInputCredentials(options);
     const sqsGrep = new SqsGrep(options);
@@ -22,9 +21,9 @@ async function main() {
 
 /**
  * Fill input credentials into the options, if needed
- * @param {*} options sqs-grep options
+ * @param options sqs-grep options
  */
-async function fillInputCredentials(options) {
+async function fillInputCredentials(options: SqsGrepOptions): Promise<void> {
     if (options.inputCredentials) {
         // Note: assigning to 'options' after each await is intentional here, as the
         // prompts must be answered in order and nothing else runs concurrently
@@ -34,7 +33,7 @@ async function fillInputCredentials(options) {
 }
 
 // Execute the async main loop and print any errors if they arise
-main().catch(err => {
+main().catch((err: Error) => {
     console.error(err.stack);
     process.exit(1);
 });

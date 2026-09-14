@@ -1,19 +1,22 @@
-/* eslint-disable no-undef */
-const assert = require('assert');
-const sinon = require('sinon');
-const fs = require('fs');
-const os = require('os');
-const path = require('path');
-const { SNS } = require("@aws-sdk/client-sns");
-const { SQS } = require("@aws-sdk/client-sqs");
-const { parseOptions } = require('../src/options');
-const { SqsGrep, MESSAGE_INDEX } = require('../src/sqs-grep');
+import assert from 'assert';
+import sinon from 'sinon';
+import fs from 'fs';
+import os from 'os';
+import path from 'path';
+import {SNS} from '@aws-sdk/client-sns';
+import {SQS} from '@aws-sdk/client-sqs';
+import {parseOptions, type SqsGrepOptions} from '../src/options.js';
+import type {SqsClient, SnsClient} from '../src/types.js';
+import {SqsGrep, MESSAGE_INDEX, type SqsGrepMessage} from '../src/sqs-grep.js';
 
 const emptyLog = sinon.stub();
 
+/** An AWS client where every method used by sqs-grep is a sinon stub */
+type Stubbed<T> = {[K in keyof T]: sinon.SinonStub};
+
 describe('SqsGrep', function () {
-    let sqs, sns;
-    const parse = args => ({
+    let sqs: Stubbed<SqsClient>, sns: Stubbed<SnsClient>;
+    const parse = (args: string[]): SqsGrepOptions => ({
         ...parseOptions(args),
         sqs, sns,
         log: emptyLog
@@ -88,20 +91,27 @@ describe('SqsGrep', function () {
             const opts = SqsGrep._getAwsOptions(options);
             assert.equal(opts.region, 'us-west-2');
         });
-        it('should set the accessKeyId', async function () {
-            const options = parse(['--accessKeyId', 'KEY_ID']);
+        it('should set static credentials when both the key id and secret are given', async function () {
+            const options = parse(['--accessKeyId', 'KEY_ID', '--secretAccessKey', 'SECRET']);
             const opts = SqsGrep._getAwsOptions(options);
-            assert.equal(opts.accessKeyId, 'KEY_ID');
+            assert.deepEqual(opts.credentials, {accessKeyId: 'KEY_ID', secretAccessKey: 'SECRET', sessionToken: undefined});
         });
-        it('should set the secretAccessKey', async function () {
-            const options = parse(['--secretAccessKey', 'SECRET']);
+        it('should set the sessionToken along with static credentials', async function () {
+            const options = parse(['--accessKeyId', 'KEY_ID', '--secretAccessKey', 'SECRET', '--sessionToken', 'TOKEN']);
             const opts = SqsGrep._getAwsOptions(options);
-            assert.equal(opts.secretAccessKey, 'SECRET');
+            assert.deepEqual(opts.credentials, {accessKeyId: 'KEY_ID', secretAccessKey: 'SECRET', sessionToken: 'TOKEN'});
         });
-        it('should set the sessionToken', async function () {
-            const options = parse(['--sessionToken', 'TOKEN']);
+        [['--accessKeyId', 'KEY_ID'], ['--secretAccessKey', 'SECRET'], ['--sessionToken', 'TOKEN']].forEach(args => {
+            it(`should fall back to the default credential chain with only ${args[0]}`, async function () {
+                const options = parse(args);
+                const opts = SqsGrep._getAwsOptions(options);
+                assert.equal(opts.credentials, undefined);
+            });
+        });
+        it('should translate --maxRetries into SDK attempts', async function () {
+            const options = parse(['--maxRetries', '5']);
             const opts = SqsGrep._getAwsOptions(options);
-            assert.equal(opts.sessionToken, 'TOKEN');
+            assert.equal(opts.maxAttempts, 6, '5 retries means 6 attempts in total');
         });
         it('should set the endpointUrl', async function () {
             const options = parse(['--endpointUrl', 'http://localhost:5000']);
@@ -132,7 +142,7 @@ describe('SqsGrep', function () {
             });
             
             // act
-            const res = await sqsGrep.run();
+            const res = (await sqsGrep.run())!;
 
             // assert
             assert.equal(res.qtyScanned, 3);
@@ -163,7 +173,7 @@ describe('SqsGrep', function () {
             });
             
             // act
-            const res = await sqsGrep.run();
+            const res = (await sqsGrep.run())!;
 
             // assert
             assert.equal(res.qtyScanned, 3);
@@ -189,7 +199,7 @@ describe('SqsGrep', function () {
             
             // act
             const resPromise = sqsGrep.run();
-            const res = await resPromise;
+            const res = (await resPromise)!;
 
             // assert
             assert.equal(res.qtyScanned, 0);
@@ -240,7 +250,7 @@ describe('SqsGrep', function () {
             });
             
             // act
-            const res = await sqsGrep.run();
+            const res = (await sqsGrep.run())!;
 
             // assert
             assert.equal(res.qtyScanned, 3);
@@ -263,7 +273,7 @@ describe('SqsGrep', function () {
             });
             
             // act
-            const res = await sqsGrep.run();
+            const res = (await sqsGrep.run())!;
 
             // assert
             assert.equal(res.qtyScanned, 3);
@@ -286,7 +296,7 @@ describe('SqsGrep', function () {
             });
             
             // act
-            const res = await sqsGrep.run();
+            const res = (await sqsGrep.run())!;
 
             // assert
             assert.equal(res.qtyScanned, 3);
@@ -324,7 +334,7 @@ describe('SqsGrep', function () {
             });
                         
             // act
-            const res = await sqsGrep.run();
+            const res = (await sqsGrep.run())!;
 
             // assert
             assert.equal(res.qtyScanned, 3);
@@ -344,13 +354,13 @@ describe('SqsGrep', function () {
                 {Body: '3'},
             ]}));
             const originalProcess = sqsGrep._processMatchedSqsMessage;
-            sinon.stub(sqsGrep, '_processMatchedSqsMessage').callsFake(function() {
+            sinon.stub(sqsGrep, '_processMatchedSqsMessage').callsFake(function (this: SqsGrep, message: SqsGrepMessage) {
                 this.interrupt();
-                originalProcess.apply(this, arguments);
+                return originalProcess.call(this, message);
             });
                         
             // act
-            const res = await sqsGrep.run();
+            const res = (await sqsGrep.run())!;
 
             // assert
             assert.equal(res.qtyScanned, 2);
@@ -371,7 +381,7 @@ describe('SqsGrep', function () {
             ]}));
             
             // act
-            const res = await sqsGrep.run();
+            const res = (await sqsGrep.run())!;
 
             // assert
             assert.equal(res.qtyScanned, 5);
@@ -393,7 +403,7 @@ describe('SqsGrep', function () {
             });
             
             // act
-            const res = await sqsGrep.run();
+            const res = (await sqsGrep.run())!;
 
             // assert
             assert.equal(res.qtyScanned, 8);
@@ -413,7 +423,7 @@ describe('SqsGrep', function () {
             });
             
             // act
-            const res = await sqsGrep.run();
+            const res = (await sqsGrep.run())!;
 
             // assert
             assert.equal(sqs.getQueueUrl.callCount, 2);
@@ -438,7 +448,7 @@ describe('SqsGrep', function () {
             });
             
             // act
-            const res = await sqsGrep.run();
+            const res = (await sqsGrep.run())!;
 
             // assert
             assert.equal(sqs.getQueueUrl.callCount, 0);
@@ -461,7 +471,7 @@ describe('SqsGrep', function () {
             });
             
             // act
-            const res = await sqsGrep.run();
+            const res = (await sqsGrep.run())!;
 
             // assert
             assert.equal(sqs.getQueueUrl.callCount, 2);
@@ -487,7 +497,7 @@ describe('SqsGrep', function () {
             sqs.getQueueUrl.withArgs({QueueName:'B.fifo'}).returns(Promise.resolve({QueueUrl: 'fake://B.fifo'}));
                 
             // act
-            const res = await sqsGrep.run();
+            const res = (await sqsGrep.run())!;
 
             // assert
             assert.equal(sqs.getQueueUrl.callCount, 2);
@@ -514,7 +524,7 @@ describe('SqsGrep', function () {
             });
             
             // act
-            const res = await sqsGrep.run();
+            const res = (await sqsGrep.run())!;
 
             // assert
             assert.equal(sqs.getQueueUrl.callCount, 1);
@@ -524,6 +534,75 @@ describe('SqsGrep', function () {
             assert.equal(sns.publish.secondCall.args[0].MessageAttributes, null);
             assert.equal(sqs.deleteMessage.callCount, 0);
             assert.equal(res.qtyScanned, 2);
+            assert.equal(res.qtyMatched, 2);
+        });
+
+        it('should handle messages without a Body', async function () {
+            // arrange: --body must not match a missing body, and --publishTo /
+            // --republish must not crash on it
+            const options = parse(['--queue=A', '--body=.', '--publishTo=FAKE_ARN', '--republish']);
+            const sqsGrep = new SqsGrep(options);
+            sqs.receiveMessage.onFirstCall().returns(Promise.resolve({Messages: [
+                {MessageId: 'no-body', MessageAttributes:{key: {StringValue: 'val'}}},
+                {Body: 'has a body'},
+            ]}));
+            [1,2,3,4,5,6].forEach(call => {
+                sqs.receiveMessage.onCall(call).returns(Promise.resolve({Messages: []}));
+            });
+
+            // act
+            const res = (await sqsGrep.run())!;
+
+            // assert
+            assert.equal(res.qtyScanned, 2);
+            assert.equal(res.qtyMatched, 1, 'A missing body must not match --body');
+            assert.equal(sns.publish.callCount, 1);
+            assert.equal(sns.publish.firstCall.args[0].Message, 'has a body');
+        });
+
+        it('should publish and republish messages without a Body when matched', async function () {
+            // arrange: with --all the body-less message is matched, so the publish
+            // paths must cope with the missing body without crashing
+            const options = parse(['--queue=A', '--all', '--publishTo=FAKE_ARN', '--republish']);
+            const sqsGrep = new SqsGrep(options);
+            sqs.receiveMessage.onFirstCall().returns(Promise.resolve({Messages: [
+                {MessageId: 'no-body', MessageAttributes:{key: {StringValue: 'val'}}},
+            ]}));
+            [1,2,3,4,5,6].forEach(call => {
+                sqs.receiveMessage.onCall(call).returns(Promise.resolve({Messages: []}));
+            });
+
+            // act
+            const res = (await sqsGrep.run())!;
+
+            // assert
+            assert.equal(res.qtyMatched, 1);
+            assert.equal(sns.publish.callCount, 1, 'Published once to --publishTo; --republish ignores non-SNS messages');
+            assert.equal(sns.publish.firstCall.args[0].Message, undefined);
+            assert.equal(sns.publish.firstCall.args[0].MessageAttributes.key.StringValue, 'val');
+        });
+
+        it('should publish plain-text (non-JSON) messages as-is', async function () {
+            // arrange: bodies which are not valid JSON must be published untouched,
+            // with their own SQS message attributes
+            const options = parse(['--queue=A', '--all', '--publishTo=FAKE_ARN']);
+            const sqsGrep = new SqsGrep(options);
+            sqs.receiveMessage.onFirstCall().returns(Promise.resolve({Messages: [
+                {Body: 'not json at all', MessageAttributes:{key: {StringValue: 'val'}}},
+                {Body: '{"Type":"Notification"'},
+            ]}));
+            [1,2,3,4,5,6].forEach(call => {
+                sqs.receiveMessage.onCall(call).returns(Promise.resolve({Messages: []}));
+            });
+
+            // act
+            const res = (await sqsGrep.run())!;
+
+            // assert
+            assert.equal(sns.publish.callCount, 2);
+            assert.equal(sns.publish.firstCall.args[0].Message, 'not json at all');
+            assert.equal(sns.publish.firstCall.args[0].MessageAttributes.key.StringValue, 'val');
+            assert.equal(sns.publish.secondCall.args[0].Message, '{"Type":"Notification"');
             assert.equal(res.qtyMatched, 2);
         });
 
@@ -540,7 +619,7 @@ describe('SqsGrep', function () {
             });
             
             // act
-            const res = await sqsGrep.run();
+            const res = (await sqsGrep.run())!;
 
             // assert
             assert.equal(sqs.getQueueUrl.callCount, 1);
@@ -566,7 +645,7 @@ describe('SqsGrep', function () {
             });
             
             // act
-            const res = await sqsGrep.run();
+            const res = (await sqsGrep.run())!;
 
             // assert
             assert.equal(sqs.getQueueUrl.callCount, 1);
@@ -596,7 +675,7 @@ describe('SqsGrep', function () {
             });
             
             // act
-            const res = await sqsGrep.run();
+            const res = (await sqsGrep.run())!;
 
             // assert
             assert.equal(sqs.getQueueUrl.callCount, 1);
@@ -622,7 +701,7 @@ describe('SqsGrep', function () {
             });
 
             // act
-            const res = await sqsGrep.run();
+            const res = (await sqsGrep.run())!;
 
             // assert
             assert.equal(sqs.getQueueUrl.callCount, 1);
@@ -649,7 +728,7 @@ describe('SqsGrep', function () {
             });
 
             // act
-            const res = await sqsGrep.run();
+            const res = (await sqsGrep.run())!;
 
             // assert
             assert.equal(sqs.getQueueUrl.callCount, 1);
@@ -679,7 +758,7 @@ describe('SqsGrep', function () {
             });
 
             // act
-            const res = await sqsGrep.run();
+            const res = (await sqsGrep.run())!;
 
             // assert
             assert.equal(sqs.getQueueUrl.callCount, 1);
@@ -708,7 +787,7 @@ describe('SqsGrep', function () {
             });
 
             // act
-            const res = await sqsGrep.run();
+            const res = (await sqsGrep.run())!;
 
             // assert
             assert.equal(sqs.getQueueUrl.callCount, 1);
@@ -731,7 +810,7 @@ describe('SqsGrep', function () {
             });
             
             // act
-            const res = await sqsGrep.run();
+            const res = (await sqsGrep.run())!;
 
             // assert
             assert.equal(sqs.getQueueUrl.callCount, 2);
@@ -754,7 +833,7 @@ describe('SqsGrep', function () {
             });
             
             // act
-            const res = await sqsGrep.run();
+            const res = (await sqsGrep.run())!;
 
             // assert
             assert.equal(sqs.getQueueUrl.callCount, 3);
@@ -780,7 +859,7 @@ describe('SqsGrep', function () {
             });
             
             // act
-            const res = await sqsGrep.run();
+            const res = (await sqsGrep.run())!;
 
             // assert
             assert.equal(sqs.getQueueUrl.callCount, 1);
@@ -798,7 +877,7 @@ describe('SqsGrep', function () {
             
             // act, assert
             await assert.rejects(() => sqsGrep.run(),
-                err => err.message.includes('ERROR - Could not find source queue for dead-letter'));
+                (err: Error) => err.message.includes('ERROR - Could not find source queue for dead-letter'));
         });
 
         it('should fail redrive with multiple source queues', async function () {
@@ -813,7 +892,7 @@ describe('SqsGrep', function () {
             
             // act, assert
             await assert.rejects(() => sqsGrep.run(),
-                err => err.message.includes('ERROR - Found a total of 3 source queues for dead-letter'));
+                (err: Error) => err.message.includes('ERROR - Found a total of 3 source queues for dead-letter'));
         });
 
         it('should write messages to file', async function () {
@@ -837,7 +916,7 @@ describe('SqsGrep', function () {
             });
             
             // act
-            const res = await sqsGrep.run();
+            const res = (await sqsGrep.run())!;
 
             // assert
             assert.equal(res.qtyScanned, 3);
@@ -859,7 +938,7 @@ describe('SqsGrep', function () {
             const sqsGrep = new SqsGrep(options);
             
             // act
-            const res = await sqsGrep.run();
+            const res = (await sqsGrep.run())!;
 
             // assert
             assert.equal(res.qtyScanned, 2);
@@ -875,9 +954,9 @@ describe('SqsGrep', function () {
                 {Body: '1'},
                 {Body: '2'},
             ]}));
-            sinon.replace(fs, 'appendFile', (file, content, encoding, callback) => {
+            sinon.replace(fs, 'appendFile', ((_file: unknown, _content: unknown, _encoding: unknown, callback: (err: Error) => void) => {
                 callback(new Error('Fake error'));
-            });
+            }) as unknown as typeof fs.appendFile);
             
             // act, assert
             assert.rejects(sqsGrep.run(), new Error('Fake error'));
@@ -887,14 +966,17 @@ describe('SqsGrep', function () {
         it('should log AWS calls when --verbose is set (custom log)', async function () {
             // arrange
             const options = parse(['--queue=A', '--all', '--verbose']);
-            function log() { }
+            const log = (): void => undefined;
             options.log = log;
 
             // act
             const awsOptions = SqsGrep._getAwsOptions(options);
 
             // assert
-            assert(awsOptions.logger.log === log);
+            assert(awsOptions.logger?.info === log);
+            assert(awsOptions.logger?.warn === log);
+            assert(awsOptions.logger?.error === log);
+            assert.equal(awsOptions.logger?.debug('ignored'), undefined, 'debug output must be silenced');
         });
 
         it('should log AWS calls when --verbose is set', async function () {
@@ -906,7 +988,7 @@ describe('SqsGrep', function () {
             const awsOptions = SqsGrep._getAwsOptions(options);
 
             // assert
-            assert(awsOptions.logger.log === console.log);
+            assert(awsOptions.logger?.info === console.log);
         });
 
         it('should call preProcessMessage user-script hook', async function () {
@@ -931,7 +1013,7 @@ describe('SqsGrep', function () {
             fs.unlinkSync(scriptFile);
             
             // act
-            const res = await sqsGrep.run();
+            const res = (await sqsGrep.run())!;
 
             // assert
             assert.equal(sqs.getQueueUrl.callCount, 2);
@@ -969,7 +1051,7 @@ describe('SqsGrep', function () {
             fs.unlinkSync(scriptFile);
             
             // act
-            const res = await sqsGrep.run();
+            const res = (await sqsGrep.run())!;
 
             // assert
             assert.equal(sqs.getQueueUrl.callCount, 2);
@@ -1004,7 +1086,7 @@ describe('SqsGrep', function () {
             fs.unlinkSync(scriptFile);
             
             // act
-            const res = await sqsGrep.run();
+            const res = (await sqsGrep.run())!;
 
             // assert
             assert.equal(sqs.getQueueUrl.callCount, 2);
@@ -1015,35 +1097,81 @@ describe('SqsGrep', function () {
             assert.equal(res.qtyMatched, 2);
         });
     });
-    describe('#_getUserScriptRequirePaths()', function () {
-        it('should resolve from the main entry point when it is a CommonJS module', function () {
-            const paths = SqsGrep._getUserScriptRequirePaths({paths: ['/fake/entry/node_modules']});
-            assert.deepEqual(paths, ['/fake/entry/node_modules']);
+    describe('#_unwrapScriptModule()', function () {
+        it('should return a CommonJS module.exports object as-is', function () {
+            const hooks = {preProcessMessage: () => undefined};
+            assert.strictEqual(SqsGrep._unwrapScriptModule(hooks), hooks);
         });
-        [undefined, null].forEach(mainModule => {
-            it(`should fall back to its own paths when the main module is ${String(mainModule)}`, function () {
-                // Happens when the entry point is not a CommonJS module
-                const paths = SqsGrep._getUserScriptRequirePaths(mainModule);
-                assert.equal(Array.isArray(paths), true);
-                assert.equal(paths.some(p => p.endsWith('node_modules')), true);
+        it('should unwrap the default export of an ES module namespace', function () {
+            const hooks = {preProcessMessage: () => undefined};
+            const namespace = Object.freeze(Object.assign(Object.create(null), {
+                [Symbol.toStringTag]: 'Module',
+                default: hooks,
+            }));
+            assert.strictEqual(SqsGrep._unwrapScriptModule(namespace), hooks);
+        });
+        it('should unwrap the default export of a transpiled ES module', function () {
+            const hooks = {preProcessMessage: () => undefined};
+            assert.strictEqual(SqsGrep._unwrapScriptModule({__esModule: true, default: hooks}), hooks);
+        });
+        it('should keep an ES module namespace without a default export', function () {
+            const namespace = {[Symbol.toStringTag]: 'Module', preProcessMessage: () => undefined};
+            assert.strictEqual(SqsGrep._unwrapScriptModule(namespace), namespace);
+        });
+        [null, undefined, 42, 'text'].forEach(value => {
+            it(`should treat the non-object export ${String(value)} as no hooks`, function () {
+                assert.deepEqual(SqsGrep._unwrapScriptModule(value), {});
             });
         });
     });
+    describe('user scripts written as ES modules', function () {
+        it('should load hooks from an .mjs script with a default export', async function () {
+            // arrange
+            const scriptFile = path.join(os.tmpdir(), `sqs-grep-test-script-${process.pid}.mjs`);
+            const options = parse(['--queue=A', '--all', '--moveTo=B', '--scriptFile', scriptFile]);
+            sqs.receiveMessage.onFirstCall().returns(Promise.resolve({Messages: [{Body: 'esm'}]}));
+            [1,2,3,4,5,6].forEach(call => {
+                sqs.receiveMessage.onCall(call).returns(Promise.resolve({Messages: []}));
+            });
+            fs.writeFileSync(scriptFile, `
+                const { ungzip } = sqs_grep_require('node-gzip');
+                export default {
+                    async preProcessMessage(message) {
+                        this.log('from an ES module script');
+                        message.Body = message.Body + '-' + ungzip.name;
+                    }
+                };
+            `);
+            try {
+                const sqsGrep = new SqsGrep(options);
+
+                // act
+                const res = (await sqsGrep.run())!;
+
+                // assert
+                sinon.assert.calledWith(sqs.sendMessage.firstCall, sinon.match.has('MessageBody', 'esm-ungzip'));
+                sinon.assert.calledWith(emptyLog, 'from an ES module script');
+                assert.equal(res.qtyMatched, 1);
+            } finally {
+                fs.unlinkSync(scriptFile);
+            }
+        });
+    });
     describe('--stateFile', function () {
-        let tempDir, stateFilePath, inputFilePath;
-        const readState = () => JSON.parse(fs.readFileSync(stateFilePath, 'utf-8'));
-        const writeInputFile = qty => {
+        let tempDir: string, stateFilePath: string, inputFilePath: string;
+        const readState = (): {lastProcessedIndex: number; inputFile: string} => JSON.parse(fs.readFileSync(stateFilePath, 'utf-8'));
+        const writeInputFile = (qty: number): void => {
             const lines = [];
             for (let i = 1; i <= qty; i++) {
                 lines.push(JSON.stringify({Body: `msg${i}`, MessageId: `id${i}`}));
             }
             fs.writeFileSync(inputFilePath, lines.join('\n'), 'utf-8');
         };
-        const stateArgs = extra => [
+        const stateArgs = (extra: string[] = []): string[] => [
             `--inputFile=${inputFilePath}`,
             '--all',
             `--stateFile=${stateFilePath}`,
-            ...(extra || []),
+            ...extra,
         ];
 
         beforeEach(function () {
@@ -1061,7 +1189,7 @@ describe('SqsGrep', function () {
             const sqsGrep = new SqsGrep(parse([`--inputFile=${inputFilePath}`, '--all']));
 
             // act
-            const res = await sqsGrep.run();
+            const res = (await sqsGrep.run())!;
 
             // assert
             assert.equal(res.qtyScanned, 3);
@@ -1075,7 +1203,7 @@ describe('SqsGrep', function () {
             const sqsGrep = new SqsGrep(parse(stateArgs()));
 
             // act
-            const res = await sqsGrep.run();
+            const res = (await sqsGrep.run())!;
 
             // assert
             assert.equal(res.qtyScanned, 3);
@@ -1091,7 +1219,7 @@ describe('SqsGrep', function () {
             const sqsGrep = new SqsGrep(parse(stateArgs(['--copyTo=B'])));
 
             // act
-            const res = await sqsGrep.run();
+            const res = (await sqsGrep.run())!;
 
             // assert
             assert.equal(res.qtyScanned, 3, 'Should only scan messages 8, 9 and 10');
@@ -1109,7 +1237,7 @@ describe('SqsGrep', function () {
             const sqsGrep = new SqsGrep(parse(stateArgs(['--copyTo=B'])));
 
             // act
-            const res = await sqsGrep.run();
+            const res = (await sqsGrep.run())!;
 
             // assert
             assert.equal(res.qtyScanned, 0);
@@ -1122,13 +1250,13 @@ describe('SqsGrep', function () {
             // arrange
             writeInputFile(2);
             fs.writeFileSync(stateFilePath, JSON.stringify({inputFile: inputFilePath, lastProcessedIndex: 5}));
-            const logs = [];
+            const logs: string[] = [];
             const options = parse(stateArgs());
-            options.log = msg => logs.push(String(msg));
+            options.log = (msg: unknown) => { logs.push(String(msg)) };
             const sqsGrep = new SqsGrep(options);
 
             // act
-            const res = await sqsGrep.run();
+            const res = (await sqsGrep.run())!;
 
             // assert
             assert.equal(res.qtyScanned, 0);
@@ -1145,7 +1273,7 @@ describe('SqsGrep', function () {
             const sqsGrep = new SqsGrep(parse(stateArgs()));
 
             // act
-            const res = await sqsGrep.run();
+            const res = (await sqsGrep.run())!;
 
             // assert
             assert.equal(res.qtyScanned, 3, 'Should scan the whole file again');
@@ -1159,7 +1287,7 @@ describe('SqsGrep', function () {
             const sqsGrep = new SqsGrep(parse(stateArgs()));
 
             // act
-            const res = await sqsGrep.run();
+            const res = (await sqsGrep.run())!;
 
             // assert
             assert.equal(res.qtyScanned, 3);
@@ -1176,7 +1304,7 @@ describe('SqsGrep', function () {
             ]));
 
             // act
-            const res = await sqsGrep.run();
+            const res = (await sqsGrep.run())!;
 
             // assert
             assert.equal(res.qtyScanned, 5);
@@ -1188,15 +1316,15 @@ describe('SqsGrep', function () {
             // arrange
             writeInputFile(10);
             const sqsGrep = new SqsGrep(parse(stateArgs(['--stateFileInterval=2'])));
-            const saved = [];
+            const saved: number[] = [];
             const originalRename = fs.renameSync;
             sinon.replace(fs, 'renameSync', (from, to) => {
-                saved.push(JSON.parse(fs.readFileSync(from, 'utf-8')).lastProcessedIndex);
+                saved.push((JSON.parse(fs.readFileSync(from, 'utf-8')) as {lastProcessedIndex: number}).lastProcessedIndex);
                 return originalRename(from, to);
             });
 
             // act
-            const res = await sqsGrep.run();
+            const res = (await sqsGrep.run())!;
 
             // assert
             assert.equal(res.qtyScanned, 10);
@@ -1223,7 +1351,7 @@ describe('SqsGrep', function () {
             const options = parse(stateArgs(['--stateFileInterval=1000']));
             const sqsGrep = new SqsGrep(options);
             const scriptHook = sqsGrep.userScript.preProcessMessage;
-            sqsGrep.userScript.preProcessMessage = async message => {
+            sqsGrep.userScript.preProcessMessage = async (message: SqsGrepMessage) => {
                 await scriptHook(message);
                 if (message.Body === 'msg4') {
                     sqsGrep.interrupt();
@@ -1231,7 +1359,7 @@ describe('SqsGrep', function () {
             };
 
             // act
-            const res = await sqsGrep.run();
+            const res = (await sqsGrep.run())!;
 
             // assert
             assert.equal(res.qtyScanned, 4);
@@ -1244,7 +1372,7 @@ describe('SqsGrep', function () {
             writeInputFile(6);
             const interruptingRun = new SqsGrep(parse(stateArgs(['--copyTo=B', '--stateFileInterval=1000'])));
             const scriptHook = interruptingRun.userScript.preProcessMessage;
-            interruptingRun.userScript.preProcessMessage = async message => {
+            interruptingRun.userScript.preProcessMessage = async (message: SqsGrepMessage) => {
                 await scriptHook(message);
                 if (message.Body === 'msg3') {
                     interruptingRun.interrupt();
@@ -1252,9 +1380,9 @@ describe('SqsGrep', function () {
             };
 
             // act
-            const firstRes = await interruptingRun.run();
+            const firstRes = (await interruptingRun.run())!;
             const resumedRun = new SqsGrep(parse(stateArgs(['--copyTo=B'])));
-            const secondRes = await resumedRun.run();
+            const secondRes = (await resumedRun.run())!;
 
             // assert
             assert.equal(firstRes.qtyScanned, 3);
@@ -1262,7 +1390,7 @@ describe('SqsGrep', function () {
             assert.equal(readState().lastProcessedIndex, 6);
             // Each message must have been copied exactly once, in order
             assert.equal(sqs.sendMessage.callCount, 6);
-            const bodies = sqs.sendMessage.getCalls().map(call => call.args[0].MessageBody);
+            const bodies = sqs.sendMessage.getCalls().map((call: sinon.SinonSpyCall) => call.args[0].MessageBody);
             assert.deepEqual(bodies, ['msg1', 'msg2', 'msg3', 'msg4', 'msg5', 'msg6']);
         });
 
@@ -1275,7 +1403,7 @@ describe('SqsGrep', function () {
             const sqsGrep = new SqsGrep(parse(stateArgs(['--copyTo=B', '--stateFileInterval=1000'])));
 
             // act, assert
-            await assert.rejects(() => sqsGrep.run(), err => err.message === 'Fake error');
+            await assert.rejects(() => sqsGrep.run(), (err: Error) => err.message === 'Fake error');
             assert.equal(readState().lastProcessedIndex, 2, 'Should save the messages processed before the failure');
         });
 
@@ -1286,15 +1414,15 @@ describe('SqsGrep', function () {
             const sqsGrep = new SqsGrep(options);
             // The copy of the first message never completes until we release it,
             // while the remaining messages are processed by the second poller
-            let releaseFirstMessage;
-            let lastMessageProcessed;
-            const lastMessageDone = new Promise(resolve => { lastMessageProcessed = resolve });
-            sqs.sendMessage.callsFake(params => {
+            let releaseFirstMessage: (() => void) | undefined;
+            let lastMessageProcessed: (() => void) | undefined;
+            const lastMessageDone = new Promise<void>(resolve => { lastMessageProcessed = resolve });
+            sqs.sendMessage.callsFake((params: {MessageBody: string}) => {
                 if (params.MessageBody === 'msg1') {
                     return new Promise(resolve => { releaseFirstMessage = () => resolve({}) });
                 }
                 if (params.MessageBody === 'msg4') {
-                    setImmediate(lastMessageProcessed);
+                    setImmediate(lastMessageProcessed!);
                 }
                 return Promise.resolve({});
             });
@@ -1303,10 +1431,10 @@ describe('SqsGrep', function () {
             const runPromise = sqsGrep.run();
             await lastMessageDone;
             await new Promise(resolve => setImmediate(resolve));
-            const inFlightIndex = sqsGrep.stateFile.lastProcessedIndex;
-            const inFlightPending = [...sqsGrep.stateFile.pendingIndexes].sort();
-            releaseFirstMessage();
-            const res = await runPromise;
+            const inFlightIndex = sqsGrep.stateFile!.lastProcessedIndex;
+            const inFlightPending = [...sqsGrep.stateFile!.pendingIndexes].sort((a, b) => a - b);
+            releaseFirstMessage!();
+            const res = (await runPromise)!;
 
             // assert
             assert.equal(inFlightIndex, 0, 'Must not skip a message which is still in flight');
@@ -1321,15 +1449,15 @@ describe('SqsGrep', function () {
             const firstRun = new SqsGrep(parse(stateArgs(['--copyTo=B', '--maxMessages=4'])));
 
             // act
-            const firstRes = await firstRun.run();
+            const firstRes = (await firstRun.run())!;
             const secondRun = new SqsGrep(parse(stateArgs(['--copyTo=B', '--maxMessages=4'])));
-            const secondRes = await secondRun.run();
+            const secondRes = (await secondRun.run())!;
 
             // assert
             assert.equal(firstRes.qtyMatched, 4);
             assert.equal(secondRes.qtyMatched, 4);
             assert.equal(readState().lastProcessedIndex, 8);
-            const bodies = sqs.sendMessage.getCalls().map(call => call.args[0].MessageBody);
+            const bodies = sqs.sendMessage.getCalls().map((call: sinon.SinonSpyCall) => call.args[0].MessageBody);
             assert.deepEqual(bodies, ['msg1', 'msg2', 'msg3', 'msg4', 'msg5', 'msg6', 'msg7', 'msg8']);
         });
 
@@ -1339,7 +1467,7 @@ describe('SqsGrep', function () {
             const sqsGrep = new SqsGrep(parse(stateArgs()));
 
             // act
-            const res = await sqsGrep.run();
+            const res = (await sqsGrep.run())!;
 
             // assert
             assert.equal(res.qtyScanned, 0);
@@ -1349,9 +1477,9 @@ describe('SqsGrep', function () {
         it('should log the saved progress', async function () {
             // arrange
             writeInputFile(2);
-            const logs = [];
+            const logs: string[] = [];
             const options = parse(stateArgs());
-            options.log = msg => logs.push(String(msg));
+            options.log = (msg: unknown) => { logs.push(String(msg)) };
             const sqsGrep = new SqsGrep(options);
 
             // act
@@ -1365,13 +1493,13 @@ describe('SqsGrep', function () {
             // arrange: --maxMessages exactly on a --stateFileInterval boundary, so the
             // final save is a no-op because the periodic save already persisted everything
             writeInputFile(10);
-            const logs = [];
+            const logs: string[] = [];
             const options = parse(stateArgs(['--stateFileInterval=4', '--maxMessages=4']));
-            options.log = msg => logs.push(String(msg));
+            options.log = (msg: unknown) => { logs.push(String(msg)) };
             const sqsGrep = new SqsGrep(options);
 
             // act
-            const res = await sqsGrep.run();
+            const res = (await sqsGrep.run())!;
 
             // assert
             assert.equal(res.qtyMatched, 4);
@@ -1383,12 +1511,12 @@ describe('SqsGrep', function () {
         it('should log the saved progress only once when interrupted', async function () {
             // arrange
             writeInputFile(10);
-            const logs = [];
+            const logs: string[] = [];
             const options = parse(stateArgs(['--stateFileInterval=1']));
-            options.log = msg => logs.push(String(msg));
+            options.log = (msg: unknown) => { logs.push(String(msg)) };
             const sqsGrep = new SqsGrep(options);
             const scriptHook = sqsGrep.userScript.preProcessMessage;
-            sqsGrep.userScript.preProcessMessage = async message => {
+            sqsGrep.userScript.preProcessMessage = async (message: SqsGrepMessage) => {
                 await scriptHook(message);
                 if (message.Body === 'msg3') {
                     sqsGrep.interrupt();
@@ -1407,9 +1535,9 @@ describe('SqsGrep', function () {
         it('should not log any progress when no message is processed', async function () {
             // arrange
             fs.writeFileSync(inputFilePath, '', 'utf-8');
-            const logs = [];
+            const logs: string[] = [];
             const options = parse(stateArgs());
-            options.log = msg => logs.push(String(msg));
+            options.log = (msg: unknown) => { logs.push(String(msg)) };
             const sqsGrep = new SqsGrep(options);
 
             // act
@@ -1423,8 +1551,8 @@ describe('SqsGrep', function () {
             // arrange
             writeInputFile(2);
             const sqsGrep = new SqsGrep(parse(stateArgs(['--copyTo=B'])));
-            const seen = [];
-            sqsGrep.userScript.preProcessMessage = message => {
+            const seen: {keys: string[]; index: number | undefined}[] = [];
+            sqsGrep.userScript.preProcessMessage = (message: SqsGrepMessage) => {
                 seen.push({keys: Object.keys(message), index: message[MESSAGE_INDEX]});
             };
 
@@ -1436,7 +1564,7 @@ describe('SqsGrep', function () {
             seen.forEach(m => assert.deepEqual(m.keys, ['Body', 'MessageId'],
                 'The index must not become an enumerable message property'));
             // The index lives in a Symbol, so it is never serialized to SQS/SNS or files
-            const sent = sqs.sendMessage.getCalls().map(call => call.args[0].MessageBody);
+            const sent = sqs.sendMessage.getCalls().map((call: sinon.SinonSpyCall) => call.args[0].MessageBody);
             assert.deepEqual(sent, ['msg1', 'msg2']);
         });
     });

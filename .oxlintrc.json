@@ -1,0 +1,51 @@
+{
+  "$schema": "./node_modules/oxlint/configuration_schema.json",
+  "plugins": ["eslint", "typescript"],
+  "options": {
+    "typeAware": true,
+    "typeCheck": true
+  },
+  "categories": {
+    "correctness": "error",
+    "suspicious": "error"
+  },
+  "env": {
+    "node": true,
+    "es2023": true
+  },
+  "rules": {
+    "eslint/no-unused-vars": ["error", {"argsIgnorePattern": "^_", "caughtErrors": "none"}],
+    "typescript/no-require-imports": ["error", {"allowAsImport": true}],
+    "typescript/no-explicit-any": "error",
+    "typescript/no-floating-promises": "error",
+    "typescript/no-unsafe-assignment": "error",
+    "typescript/no-unsafe-member-access": "error",
+    "typescript/no-unsafe-argument": "error",
+    "typescript/no-unsafe-call": "error",
+    "typescript/no-unsafe-return": "error",
+    "typescript/unbound-method": "error",
+    "typescript/require-await": "error",
+    "typescript/restrict-template-expressions": "error",
+    "typescript/no-non-null-assertion": "off",
+    "typescript/no-unsafe-type-assertion": "off",
+    "eslint/no-underscore-dangle": "off"
+  },
+  "overrides": [
+    {
+      "files": ["test/**/*.ts"],
+      "rules": {
+        "typescript/no-explicit-any": "off",
+        "typescript/no-unsafe-assignment": "off",
+        "typescript/no-unsafe-member-access": "off",
+        "typescript/no-unsafe-argument": "off",
+        "typescript/no-unsafe-call": "off",
+        "typescript/no-unsafe-return": "off",
+        "typescript/unbound-method": "off",
+        "typescript/no-floating-promises": "off",
+        "typescript/require-await": "off",
+        "typescript/restrict-template-expressions": "off"
+      }
+    }
+  ],
+  "ignorePatterns": ["dist/", "build/", "coverage/", "node_modules/"]
+}

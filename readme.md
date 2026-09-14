@@ -21,7 +21,9 @@ $ npx sqs-grep --queue MyQueue --body "Error"
 `npx` downloads the latest version on first use and caches it, which makes it a convenient way to
 run `sqs-grep` on a machine you would rather not install anything on (a bastion host or a CI job,
 for example). Every example in this document works the same way with `npx sqs-grep` in place of
-`sqs-grep`. To pin a specific version, pass it in the package name: `npx sqs-grep@1.19.0 --help`.
+`sqs-grep`. To pin a specific version, pass it in the package name: `npx sqs-grep@2.0.0 --help`.
+
+`sqs-grep` requires **Node.js 22.12 or later**.
 
 > **Pre-compiled binaries are no longer distributed as of v1.19.** Earlier releases shipped
 > single-executable builds for Linux, MacOS and Windows, produced with
@@ -44,6 +46,7 @@ for example). Every example in this document works the same way with `npx sqs-gr
 * Cross-platform: runs anywhere Node.js runs (Linux, MacOS and Windows)
 * Supports FIFO queues for both sources and targets
 * [Custom processing scripts](user-scripts.md)
+* Written in TypeScript, and usable as a library from both JavaScript and TypeScript (see [Programmatic usage](#programmatic-usage))
 
 # Usage examples
 Find messages containing the text 'Error' in the body:
@@ -189,7 +192,7 @@ If you don't specify `--moveTo` nor `--delete`, and your source queue is larger 
 ```
 $ sqs-grep --help
 
-sqs-grep version 1.19.0
+sqs-grep version 2.0.0
 
 sqs-grep
 
@@ -301,3 +304,56 @@ Usage examples
 `sqs-grep` supports custom message processing by providing a script file with the `--scriptFile` option.
 
 See [user-scripts.md](user-scripts.md) for additional documentation on that feature.
+
+# Programmatic usage
+Besides the command-line, `sqs-grep` can be used as a library. It is published as an ES module with
+bundled TypeScript declarations, so it works the same from JavaScript and TypeScript:
+
+```js
+import { SqsGrep } from 'sqs-grep';
+
+const sqsGrep = new SqsGrep({
+    queue: 'MyQueue',
+    region: 'us-east-1',
+    body: /Error/,
+    log: message => console.log(message),   // optional - defaults to console.log
+});
+const result = await sqsGrep.run();          // null when the options are invalid
+console.log(result.qtyScanned, result.qtyMatched);
+```
+
+```ts
+import { SqsGrep, type SqsGrepOptions } from 'sqs-grep';
+
+const options: Partial<SqsGrepOptions> = { queue: 'MyQueue', all: true, copyTo: 'OtherQueue' };
+const result = await new SqsGrep(options).run();
+```
+
+All command-line options are available as properties of the options object (`--maxMessages 10`
+becomes `maxMessages: 10`, and so on). You can also inject your own AWS SDK clients with the `sqs`
+and `sns` options, and call `interrupt()` to stop a running scan gracefully.
+
+CommonJS code can still load the package on Node.js 22.12 or later, which supports `require()` of
+ES modules natively: `const { SqsGrep } = require('sqs-grep');` keeps working unchanged.
+
+# Upgrading from 1.x to 2.0
+Version 2.0 is a rewrite of the code base in TypeScript. The command-line interface, the message
+file format, and the user-script contract are unchanged, so existing scripts and workflows keep
+working. The changes to be aware of are:
+* **Node.js 22.12 or later is required** (Node.js 18 and 20 reached their end of life).
+* **The package is now an ES module.** `import { SqsGrep } from 'sqs-grep'` is the primary way to use
+  it as a library. `require('sqs-grep')` still works on Node.js 22.12+, which can `require()` ES modules
+  natively, so most CommonJS consumers need no change - only older Node.js versions are affected.
+* **User scripts are unaffected.** Existing plain JavaScript `--scriptFile` scripts using
+  `module.exports` keep working as-is (see [user-scripts.md](user-scripts.md)), and scripts may now
+  also be written as ES modules.
+* **`--accessKeyId` / `--secretAccessKey` / `--sessionToken` now work.** Since the move to AWS SDK v3 in
+  1.18 these options were silently ignored (they were passed in the SDK v2 shape). They are now passed
+  as static credentials, and are only used when *both* the access key id and the secret access key are
+  given - otherwise the standard AWS credential chain is used, as before.
+* **`--maxRetries` is now honoured** for the same reason (it is mapped to the SDK's `maxAttempts`).
+* **`--verbose` logs API calls through the SDK's structured logger** (`info`/`warn`/`error`), which is
+  more detailed than before.
+* For library users, the package entry point now exports TypeScript types alongside `SqsGrep`, and the
+  main class lives in `dist/` instead of `src/` (only relevant if you deep-imported `sqs-grep/src/...`,
+  which was never a supported path).

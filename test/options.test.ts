@@ -1,10 +1,42 @@
-/* eslint-disable no-undef */
-const assert = require('assert');
-const sinon = require('sinon');
-const {parseOptions, validateOptions, printMatchingRules} = require('../src/options');
+import assert from 'assert';
+import sinon from 'sinon';
+import fs from 'fs';
+import os from 'os';
+import path from 'path';
+import {parseOptions, validateOptions, printMatchingRules, readPackageVersion} from '../src/options.js';
+
+/** Collects everything logged, and lets tests match against it */
+const logCollector = (): {logs: unknown[]; log: sinon.SinonStub; hasLog: (regexp: RegExp) => boolean} => {
+    const logs: unknown[] = [];
+    const log = sinon.stub().callsFake((...args: unknown[]) => { logs.push(...args) });
+    return {logs, log, hasLog: regexp => regexp.test(logs.map(s => String(s)).join(''))};
+};
 
 describe('Options', function () {
     afterEach(() => sinon.restore());
+    describe('#readPackageVersion()', function () {
+        it('should read the version of this package by default', function () {
+            // Tests always run from the repository root
+            const expected = (JSON.parse(fs.readFileSync(path.join(process.cwd(), 'package.json'), 'utf-8')) as {version: string}).version;
+            assert.equal(readPackageVersion(), expected);
+            assert.match(readPackageVersion(), /^\d+\.\d+\.\d+/);
+        });
+        it('should walk up the directory tree to the nearest package.json', function () {
+            const tempDir = fs.mkdtempSync(path.join(os.tmpdir(), 'sqs-grep-pkg-'));
+            try {
+                fs.writeFileSync(path.join(tempDir, 'package.json'), JSON.stringify({version: '9.8.7'}));
+                const nested = path.join(tempDir, 'a', 'b', 'c');
+                fs.mkdirSync(nested, {recursive: true});
+                assert.equal(readPackageVersion(nested), '9.8.7');
+            } finally {
+                fs.rmSync(tempDir, {recursive: true, force: true});
+            }
+        });
+        it('should fail when no package.json can be found', function () {
+            sinon.replace(fs, 'readFileSync', sinon.fake.throws(new Error('ENOENT')));
+            assert.throws(() => readPackageVersion('/nowhere/to/be/found'), /Could not find the sqs-grep package.json above '\/nowhere\/to\/be\/found'/);
+        });
+    });
     describe('#parseOptions()', function () {
         it('should parse --help', function () {
             const options = parseOptions(['--help']);
@@ -37,11 +69,9 @@ describe('Options', function () {
         });
     });
     describe('#validateOptions()', function () {
-        let logs, log;
-        const hasLog = regexp => regexp.test(logs.map(s=>s.toString()).join(''));
+        let logs: unknown[], log: sinon.SinonStub, hasLog: (regexp: RegExp) => boolean;
         beforeEach(() => {
-            logs = [];
-            log = sinon.stub().callsFake(function () { logs.push(...arguments) });
+            ({logs, log, hasLog} = logCollector());
         });
         it('should show help', function () {
             const options = parseOptions(['--help']);
@@ -77,7 +107,7 @@ describe('Options', function () {
         });
         it('should not allow missing --parallel', function () {
             const options = parseOptions(['--queue', 'TestQueue', '--all']);
-            options.parallel = undefined;
+            (options as {parallel?: number}).parallel = undefined;
             assert.equal(validateOptions(options, log), false);
             assert.equal(hasLog(/ERROR: Invalid .*--parallel.* value \(must be greater than 0\)/), true);
         });
@@ -88,7 +118,7 @@ describe('Options', function () {
         });
         it('should not allow missing --timeout', function () {
             const options = parseOptions(['--queue', 'TestQueue', '--all']);
-            options.timeout = undefined;
+            (options as {timeout?: number}).timeout = undefined;
             assert.equal(validateOptions(options, log), false);
             assert.equal(hasLog(/ERROR: Invalid .*--timeout.* value \(must be greater than 0\)/), true);
         });
@@ -129,7 +159,7 @@ describe('Options', function () {
         });
         it('should not allow missing --stateFileInterval', function () {
             const options = parseOptions(['--inputFile', 'TestFile.txt', '--all', '--stateFile', 'state.json']);
-            options.stateFileInterval = undefined;
+            (options as {stateFileInterval?: number}).stateFileInterval = undefined;
             assert.equal(validateOptions(options, log), false);
             assert.equal(hasLog(/ERROR: Invalid .*--stateFileInterval.* value \(must be greater than 0\)/), true);
         });
@@ -147,13 +177,11 @@ describe('Options', function () {
         });
     });
     describe('#printMatchingRules()', function () {
-        let logs, log;
-        const hasLog = regexp => regexp.test(logs.map(s=>s.toString()).join(''));
+        let log: sinon.SinonStub, hasLog: (regexp: RegExp) => boolean;
         beforeEach(() => {
-            logs = [];
-            log = sinon.stub().callsFake(function () { logs.push(...arguments) });
+            ({log, hasLog} = logCollector());
         });
-        [
+        ([
             [['--all'], /Will match .*ALL.* messages in the queue/],
             [['--all', '--delete'], /Will .*DELETE.* .*ALL.* messages in the queue/],
             [['--all', '--moveTo=A'], /Will .*move.* .*ALL.* messages in the queue/],
@@ -180,7 +208,7 @@ describe('Options', function () {
                 ['--body=Test', '--attribute=key=val', '--delete', '--negate'],
                 /Will .*DELETE.* messages .*not containing.* the RegExp .*\/Test\/.* in its body.*Will .*DELETE.* messages containing an attribute named '.*key.*' with its value .*not containing.* the RegExp .*\/val\/.*/
             ],
-        ].forEach(([args, regexp]) => {
+        ] as [string[], RegExp][]).forEach(([args, regexp]) => {
             it(`should show correct info for ${args}`, function () {
                 const options = parseOptions(args);
                 printMatchingRules(options, log);

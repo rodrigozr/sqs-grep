@@ -1,16 +1,45 @@
-/* eslint-disable no-undef */
-const { SNS } = require("@aws-sdk/client-sns");
-const { SQS } = require("@aws-sdk/client-sqs");
-const util = require('util');
-const exec = util.promisify(require('child_process').exec);
-const assert = require('assert');
-const sinon = require('sinon');
-const {parseOptions} = require('../src/options');
-const {SqsGrep} = require('../src/sqs-grep');
+import {SNS} from '@aws-sdk/client-sns';
+import {SQS, type QueueAttributeName, type GetQueueAttributesResult} from '@aws-sdk/client-sqs';
+import util from 'util';
+import {exec as execCb} from 'child_process';
+const exec = util.promisify(execCb);
+import assert from 'assert';
+import sinon from 'sinon';
+import {parseOptions, type SqsGrepOptions} from '../src/options.js';
+import {SqsGrep} from '../src/sqs-grep.js';
 
 const emptyLog = sinon.stub();
 
+/**
+ * Container CLIs which can run the LocalStack container. They all accept the same
+ * `run`/`logs`/`rm` arguments used below. Note that a shell alias (such as
+ * `alias docker=finch`) is not visible to `child_process.exec`, hence the probing.
+ * Set CONTAINER_CLI to force a specific one.
+ */
+const CONTAINER_CLI_CANDIDATES = ['docker', 'finch', 'podman', 'nerdctl'];
+
+/**
+ * Finds the first working container CLI
+ * @returns the CLI command, or undefined when none is available
+ */
+async function detectContainerCli(): Promise<string | undefined> {
+    const candidates = process.env['CONTAINER_CLI'] ? [process.env['CONTAINER_CLI']] : CONTAINER_CLI_CANDIDATES;
+    for (const cli of candidates) {
+        try {
+            // 'info' (unlike '--version') also fails when the daemon / VM is not running
+            await exec(`${cli} info`);
+            return cli;
+        } catch {
+            // try the next one
+        }
+    }
+    return undefined;
+}
+
 describe('Integration Tests', function () {
+    // Note: the container name must be visible to both the 'before' and 'after' hooks
+    const containerName = 'localstack-sqs-grep-tests';
+    let containerCli: string | undefined;
     let sqs = new SQS();
     let sns = new SNS();
     before(async function() {
@@ -20,18 +49,21 @@ describe('Integration Tests', function () {
             return;
         }
         this.timeout(6 * 60 * 1000);
-        const containerName = 'localstack-sqs-grep-tests';
+        containerCli = await detectContainerCli();
+        if (!containerCli) {
+            console.log(`    Skipping integration tests because no working container CLI was found (tried: ${CONTAINER_CLI_CANDIDATES.join(', ')})`);
+            this.skip();
+            return;
+        }
         try {
-            // Check if docker is installed and working
-            await exec('docker --version');
-            console.log('    Starting docker container...');
+            console.log(`    Starting the LocalStack container using '${containerCli}'...`);
             try {
-                await exec(`docker rm -f ${containerName}`);
-            } catch (err) {
-                /* ignore */
+                await exec(`${containerCli} rm -f ${containerName}`);
+            } catch {
+                /* ignore - the container did not exist */
             }
-            // Start the docker container
-            await exec(`docker run -d --name ${containerName} -p 4566:4566 -p 4510-4559:4510-4559 -e SERVICES=sqs,sns localstack/localstack:3.0.2`);
+            // Start the container
+            await exec(`${containerCli} run -d --name ${containerName} -p 4566:4566 -p 4510-4559:4510-4559 -e SERVICES=sqs,sns localstack/localstack:3.0.2`);
             process.env['AWS_ACCESS_KEY_ID'] = 'test';
             process.env['AWS_SECRET_ACCESS_KEY'] = 'test';
             // Create a custom SQS connector
@@ -49,8 +81,9 @@ describe('Integration Tests', function () {
             // Wait for it to be ready for a maximum of 5 minutes
             const deadline = new Date().getTime() + (5 * 60 * 1000);
             while (new Date().getTime() < deadline) {
-                let {stdout} = await exec(`docker logs ${containerName}`);
-                if (stdout.split('\n').includes('Ready.')) {
+                const {stdout, stderr} = await exec(`${containerCli} logs ${containerName}`);
+                // LocalStack logs to stderr; some CLIs merge it into stdout
+                if (`${stdout}\n${stderr}`.split('\n').includes('Ready.')) {
                     // Ensure we can create a queue and list SNS topics
                     try {
                         await sqs.createQueue({QueueName: 'ReadyTest'});
@@ -64,22 +97,28 @@ describe('Integration Tests', function () {
                 // Wait 100ms...
                 await new Promise(resolve => setTimeout(resolve, 100));
             }
-            throw new Error('Could not start the docker container');
+            throw new Error('Timed out waiting for the LocalStack container to become ready');
         } catch (err) {
-            console.log('    Skipping integration tests because docker is not installed or not working properly');
-            this.skip();
+            // Do not hide the real cause: a container CLI is available, so a failure
+            // here is a real problem (image pull, port already in use, ...)
+            console.log(`    ERROR: Could not start the LocalStack container using '${containerCli}':`);
+            console.log(`    ${(err as Error).message.trim().split('\n').join('\n    ')}`);
+            throw err;
         }
     });
     after(async function() {
         this.timeout(20000);
+        if (!containerCli) {
+            return;
+        }
         try {
-            console.log('    Removing docker container...');
-            await exec(`docker rm -f ${containerName}`);
-        } catch (err) {
+            console.log('    Removing the LocalStack container...');
+            await exec(`${containerCli} rm -f ${containerName}`);
+        } catch {
             /* ignore */
         }
     });
-    let queueUrl1, queueUrl2, queueUrl3, queueAttributes1;
+    let queueUrl1: string | undefined, queueUrl2: string | undefined, queueUrl3: string | undefined, queueAttributes1: GetQueueAttributesResult;
     beforeEach(async function() {
         queueUrl1 = (await sqs.createQueue({QueueName: 'Queue1'})).QueueUrl;
         queueAttributes1 = await sqs.getQueueAttributes({
@@ -92,7 +131,7 @@ describe('Integration Tests', function () {
             Attributes: {
                 RedrivePolicy: JSON.stringify({
                     maxReceiveCount: 10,
-                    deadLetterTargetArn: queueAttributes1.Attributes.QueueArn
+                    deadLetterTargetArn: queueAttributes1.Attributes?.QueueArn
                 })
             }
         })).QueueUrl;
@@ -103,26 +142,26 @@ describe('Integration Tests', function () {
         await sqs.sendMessage({QueueUrl: queueUrl1, MessageBody: 'message 4 - test'});
     });
     afterEach(async function() {
-        const queues = (await sqs.listQueues({})).QueueUrls;
+        const queues = (await sqs.listQueues({})).QueueUrls ?? [];
         for (const url of queues) {
             await sqs.deleteQueue({QueueUrl: url});
         }
     });
-    const getQueueAttribute = async (queueUrl, attribute) => {
+    const getQueueAttribute = async (queueUrl: string | undefined, attribute: QueueAttributeName): Promise<string | undefined> => {
         const queueAttributes = await sqs.getQueueAttributes({
             QueueUrl: queueUrl,
             AttributeNames: [attribute]
         });
-        return queueAttributes.Attributes[attribute];
+        return queueAttributes.Attributes?.[attribute];
     };
-    const parse = args => ({
+    const parse = (args: string[]): SqsGrepOptions => ({
         sqs, sns,
         log: emptyLog,
         ...parseOptions(args)
     });
     it('should scan the queue', async function () {
         // act
-        const {qtyScanned, qtyMatched} = await new SqsGrep(parse(['--queue=Queue1', '--body=test'])).run();
+        const {qtyScanned, qtyMatched} = (await new SqsGrep(parse(['--queue=Queue1', '--body=test'])).run())!;
         
         // assert
         assert.equal(qtyScanned, 4);
@@ -130,7 +169,7 @@ describe('Integration Tests', function () {
     });
     it('should copy the queue', async function () {
         // act
-        const {qtyScanned, qtyMatched} = await new SqsGrep(parse(['--queue=Queue1', '--copyTo=Queue2', '--body=test'])).run();
+        const {qtyScanned, qtyMatched} = (await new SqsGrep(parse(['--queue=Queue1', '--copyTo=Queue2', '--body=test'])).run())!;
         
         // assert
         assert.equal(qtyScanned, 4);
@@ -149,7 +188,7 @@ describe('Integration Tests', function () {
         });
         
         // act
-        const {qtyScanned, qtyMatched} = await new SqsGrep(parse(['--queue=Queue1', '--publishTo', topic, '--body=test'])).run();
+        const {qtyScanned, qtyMatched} = (await new SqsGrep(parse(['--queue=Queue1', '--publishTo', topic!, '--body=test'])).run())!;
         await new Promise(resolve => setTimeout(resolve, 50));
         
         // assert
@@ -174,7 +213,7 @@ describe('Integration Tests', function () {
         await new SqsGrep(parse(['--queue=Queue2', '--moveTo=Queue3', '--body=publish'])).run();
         
         // act
-        const {qtyScanned, qtyMatched} = await new SqsGrep(parse(['--queue=Queue3', '--delete', '--republish', '--body=publish'])).run();
+        const {qtyScanned, qtyMatched} = (await new SqsGrep(parse(['--queue=Queue3', '--delete', '--republish', '--body=publish'])).run())!;
         
         // assert
         assert.equal(qtyScanned, 1);
@@ -185,7 +224,7 @@ describe('Integration Tests', function () {
     });
     it('should move the queue', async function () {
         // act
-        const {qtyScanned, qtyMatched} = await new SqsGrep(parse(['--queue=Queue1', '--moveTo=Queue2', '--body=test'])).run();
+        const {qtyScanned, qtyMatched} = (await new SqsGrep(parse(['--queue=Queue1', '--moveTo=Queue2', '--body=test'])).run())!;
         
         // assert
         assert.equal(qtyScanned, 4);
@@ -196,7 +235,7 @@ describe('Integration Tests', function () {
     });
     it('should move and copy the queue', async function () {
         // act
-        const {qtyScanned, qtyMatched} = await new SqsGrep(parse(['--queue=Queue1', '--moveTo=Queue2', '--copyTo=Queue3', '--body=test'])).run();
+        const {qtyScanned, qtyMatched} = (await new SqsGrep(parse(['--queue=Queue1', '--moveTo=Queue2', '--copyTo=Queue3', '--body=test'])).run())!;
         
         // assert
         assert.equal(qtyScanned, 4);
@@ -208,7 +247,7 @@ describe('Integration Tests', function () {
     });
     it('should redrive the queue', async function () {
         // act
-        const {qtyScanned, qtyMatched} = await new SqsGrep(parse(['--queue=Queue1', '--redrive', '--body=test'])).run();
+        const {qtyScanned, qtyMatched} = (await new SqsGrep(parse(['--queue=Queue1', '--redrive', '--body=test'])).run())!;
         
         // assert
         assert.equal(qtyScanned, 4);
@@ -220,7 +259,7 @@ describe('Integration Tests', function () {
     it('should fail redrive when there are no source queues', async function () {
         // act, assert
         await assert.rejects(() => new SqsGrep(parse(['--queue=Queue2', '--redrive', '--all'])).run(),
-            err => err.message.includes('ERROR - Could not find source queue for dead-letter'));
+            (err: Error) => err.message.includes('ERROR - Could not find source queue for dead-letter'));
     });
     it('should fail redrive when there are multiple source queues', async function () {
         // arrange
@@ -229,18 +268,18 @@ describe('Integration Tests', function () {
             Attributes: {
                 RedrivePolicy: JSON.stringify({
                     maxReceiveCount: 10,
-                    deadLetterTargetArn: queueAttributes1.Attributes.QueueArn
+                    deadLetterTargetArn: queueAttributes1.Attributes?.QueueArn
                 })
             }
         });
 
         // act, assert
         await assert.rejects(() => new SqsGrep(parse(['--queue=Queue1', '--redrive', '--all'])).run(),
-            err => err.message.includes('ERROR - Found a total of 2 source queues for dead-letter'));
+            (err: Error) => err.message.includes('ERROR - Found a total of 2 source queues for dead-letter'));
     });
     it('should support queue URLs', async function () {
         // act
-        const {qtyScanned, qtyMatched} = await new SqsGrep(parse(['--queue', queueUrl1, '--moveTo', queueUrl2, '--copyTo', queueUrl3, '--body=test'])).run();
+        const {qtyScanned, qtyMatched} = (await new SqsGrep(parse(['--queue', queueUrl1!, '--moveTo', queueUrl2!, '--copyTo', queueUrl3!, '--body=test'])).run())!;
         
         // assert
         assert.equal(qtyScanned, 4);
@@ -260,7 +299,7 @@ describe('Integration Tests', function () {
         );
 
         // act
-        const {qtyScanned, qtyMatched} = await new SqsGrep(parse(['--queue=Queue.fifo', '--moveTo=Queue2', '--copyTo=Queue3', '--body=test'])).run();
+        const {qtyScanned, qtyMatched} = (await new SqsGrep(parse(['--queue=Queue.fifo', '--moveTo=Queue2', '--copyTo=Queue3', '--body=test'])).run())!;
         
         // assert
         assert.equal(qtyScanned, 2);
@@ -276,7 +315,7 @@ describe('Integration Tests', function () {
         const fifoQueueUrl = (await sqs.createQueue({QueueName: 'Queue.fifo', Attributes: attr})).QueueUrl;
 
         // act
-        const {qtyScanned, qtyMatched} = await new SqsGrep(parse(['--queue=Queue1', '--copyTo=Queue.fifo', '--body=test'])).run();
+        const {qtyScanned, qtyMatched} = (await new SqsGrep(parse(['--queue=Queue1', '--copyTo=Queue.fifo', '--body=test'])).run())!;
         
         // assert
         assert.equal(qtyScanned, 4);

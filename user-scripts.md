@@ -40,11 +40,46 @@ module.exports = {
 };
 ```
 
-All hooks will be bound to the [SqsGrep](https://github.com/rodrigozr/sqs-grep/blob/master/src/sqs-grep.js) class instance which is currently running, so hooks have access to all objects exposed by SqsGrep, such as:
+All hooks will be bound to the [SqsGrep](https://github.com/rodrigozr/sqs-grep/blob/master/src/sqs-grep.ts) class instance which is currently running, so hooks have access to all objects exposed by SqsGrep, such as:
 * `options` - object containing all execution options
 * `log(message)` - function which logs something to the console, respecting the --silent command-line preference
 
 All hooks can also be defined as an **async function** or a function which returns a Promise and sqs-grep will properly handle them using `await`.
+
+## Script formats: CommonJS and ES modules
+All the examples in this document are plain CommonJS JavaScript files (`module.exports = {...}`),
+which is the format `sqs-grep` has always supported. Nothing changes for these scripts in
+`sqs-grep` 2.0: they keep working as-is, including `require()` of local modules and `sqs_grep_require()`.
+
+Scripts can also be written as ES modules, exporting the hooks as the **default export**. Use the
+`.mjs` extension (or `.js` inside a directory whose `package.json` has `"type": "module"`):
+
+```js
+// script.mjs
+const { ungzip } = sqs_grep_require('node-gzip');
+
+export default {
+    async preProcessMessage(message) {
+        this.log(`Processing ${message.MessageId}`);
+    },
+};
+```
+
+## Writing scripts in TypeScript
+If you prefer to author a script in TypeScript, compile it to JavaScript first (either format) and
+point `--scriptFile` at the compiled file. The `UserScript` type exported by `sqs-grep` gives you
+typed hooks and a correctly typed `this`:
+
+```ts
+import type { UserScript } from 'sqs-grep';
+
+const script: UserScript = {
+    preProcessMessage(message) {
+        this.log(`Processing ${message.MessageId}`);
+    },
+};
+export default script;
+```
 
 # NodeJS `require()` support
 User scripts are free to `require()` standard NodeJS modules normally, including local npm modules declared in an optional `package.json` file in the same directory of your script.
