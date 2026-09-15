@@ -380,11 +380,6 @@ working. The changes to be aware of are:
 * **User scripts are unaffected.** Existing plain JavaScript `--scriptFile` scripts using
   `module.exports` keep working as-is (see [user-scripts.md](user-scripts.md)), and scripts may now
   also be written as ES modules.
-* **`--accessKeyId` / `--secretAccessKey` / `--sessionToken` now work.** Since the move to AWS SDK v3 in
-  1.18 these options were silently ignored (they were passed in the SDK v2 shape). They are now passed
-  as static credentials, and are only used when *both* the access key id and the secret access key are
-  given - otherwise the standard AWS credential chain is used, as before.
-* **`--maxRetries` is now honoured** for the same reason (it is mapped to the SDK's `maxAttempts`).
 * **`--verbose` logs API calls through the SDK's structured logger** (`info`/`warn`/`error`), which is
   more detailed than before.
 * For library users, the package entry point now exports TypeScript types alongside `SqsGrep`, and the
