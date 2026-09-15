@@ -11,8 +11,19 @@ import {SqsGrep} from '../src/sqs-grep.js';
 const emptyLog = sinon.stub();
 
 /**
- * Container CLIs which can run the LocalStack container. They all accept the same
- * `run`/`logs`/`rm` arguments used below. Note that a shell alias (such as
+ * Container image providing a local AWS emulator with SQS and SNS.
+ *
+ * Floci is used since LocalStack folded its community edition into the licensed
+ * image in March 2026 (every release from 2026.x on refuses to start without a
+ * LOCALSTACK_AUTH_TOKEN). Floci is MIT licensed, keeps LocalStack's port, health
+ * endpoint and credentials conventions, and passes this whole suite unchanged.
+ * Pinned to a release for reproducible test runs.
+ */
+const EMULATOR_IMAGE = 'floci/floci:2.1.0';
+
+/**
+ * Container CLIs which can run the emulator container. They all accept the same
+ * `run`/`rm` arguments used below. Note that a shell alias (such as
  * `alias docker=finch`) is not visible to `child_process.exec`, hence the probing.
  * Set CONTAINER_CLI to force a specific one.
  */
@@ -38,7 +49,7 @@ async function detectContainerCli(): Promise<string | undefined> {
 
 describe('Integration Tests', function () {
     // Note: the container name must be visible to both the 'before' and 'after' hooks
-    const containerName = 'localstack-sqs-grep-tests';
+    const containerName = 'sqs-grep-integration-tests';
     let containerCli: string | undefined;
     let sqs = new SQS();
     let sns = new SNS();
@@ -56,18 +67,14 @@ describe('Integration Tests', function () {
             return;
         }
         try {
-            console.log(`    Starting the LocalStack container using '${containerCli}'...`);
+            console.log(`    Starting the ${EMULATOR_IMAGE} container using '${containerCli}'...`);
             try {
                 await exec(`${containerCli} rm -f ${containerName}`);
             } catch {
                 /* ignore - the container did not exist */
             }
-            // Start the container.
-            // 4.14.0 (Feb 2026) is the last LocalStack release which runs without a
-            // licence: from the 2026.x line onwards the image refuses to start unless
-            // LOCALSTACK_AUTH_TOKEN is set (exit code 55, "License activation failed").
-            await exec(`${containerCli} run -d --name ${containerName} -p 4566:4566 -p 4510-4559:4510-4559 -e SERVICES=sqs,sns localstack/localstack:4.14.0`);
-            // LocalStack accepts any credentials. They are passed explicitly rather
+            await exec(`${containerCli} run -d --name ${containerName} -p 4566:4566 ${EMULATOR_IMAGE}`);
+            // The emulator accepts any credentials. They are passed explicitly rather
             // than through the environment, as the SDK ignores AWS_ACCESS_KEY_ID and
             // AWS_SECRET_ACCESS_KEY whenever AWS_PROFILE happens to be set
             const options = parseOptions(['--endpointUrl', 'http://localhost:4566']);
@@ -78,30 +85,29 @@ describe('Integration Tests', function () {
             };
             sqs = new SQS(clientConfig);
             sns = new SNS(clientConfig);
-            // Wait for it to be ready for a maximum of 5 minutes
-            const deadline = new Date().getTime() + (5 * 60 * 1000);
+            // Wait for it to be ready for a maximum of 2 minutes (it usually takes a
+            // couple of seconds, but the image may have to be pulled first). Readiness
+            // is probed through the SDK itself, which is what the tests need to work,
+            // rather than by watching the container logs
+            const deadline = new Date().getTime() + (2 * 60 * 1000);
+            let lastError: unknown;
             while (new Date().getTime() < deadline) {
-                const {stdout, stderr} = await exec(`${containerCli} logs ${containerName}`);
-                // LocalStack logs to stderr; some CLIs merge it into stdout
-                if (`${stdout}\n${stderr}`.split('\n').includes('Ready.')) {
-                    // Ensure we can create a queue and list SNS topics
-                    try {
-                        await sqs.createQueue({QueueName: 'ReadyTest'});
-                        await sns.listTopics({});
-                        // Success - the container is ready to be used!
-                        return;
-                    } catch (ex) {
-                        console.log(ex);
-                    }
+                try {
+                    await sqs.createQueue({QueueName: 'ReadyTest'});
+                    await sns.listTopics({});
+                    // Success - the container is ready to be used!
+                    return;
+                } catch (ex) {
+                    lastError = ex;
                 }
-                // Wait 100ms...
-                await new Promise(resolve => setTimeout(resolve, 100));
+                // Wait 250ms...
+                await new Promise(resolve => setTimeout(resolve, 250));
             }
-            throw new Error('Timed out waiting for the LocalStack container to become ready');
+            throw new Error(`Timed out waiting for the ${EMULATOR_IMAGE} container to become ready (last error: ${String(lastError)})`);
         } catch (err) {
             // Do not hide the real cause: a container CLI is available, so a failure
             // here is a real problem (image pull, port already in use, ...)
-            console.log(`    ERROR: Could not start the LocalStack container using '${containerCli}':`);
+            console.log(`    ERROR: Could not start the ${EMULATOR_IMAGE} container using '${containerCli}':`);
             console.log(`    ${(err as Error).message.trim().split('\n').join('\n    ')}`);
             throw err;
         }
@@ -112,7 +118,7 @@ describe('Integration Tests', function () {
             return;
         }
         try {
-            console.log('    Removing the LocalStack container...');
+            console.log('    Removing the emulator container...');
             await exec(`${containerCli} rm -f ${containerName}`);
         } catch {
             /* ignore */
