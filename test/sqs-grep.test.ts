@@ -7,9 +7,10 @@ import {SNS} from '@aws-sdk/client-sns';
 import {SQS} from '@aws-sdk/client-sqs';
 import {parseOptions, type SqsGrepOptions} from '../src/options.js';
 import type {SqsClient, SnsClient} from '../src/types.js';
-import {SqsGrep, MESSAGE_INDEX, type SqsGrepMessage} from '../src/sqs-grep.js';
+import {SqsGrep, MESSAGE_INDEX, INPUT_FILE_YIELD_INTERVAL, type SqsGrepMessage} from '../src/sqs-grep.js';
 
 const emptyLog = sinon.stub();
+const emptyOut = sinon.stub();
 
 /** An AWS client where every method used by sqs-grep is a sinon stub */
 type Stubbed<T> = {[K in keyof T]: sinon.SinonStub};
@@ -19,7 +20,8 @@ describe('SqsGrep', function () {
     const parse = (args: string[]): SqsGrepOptions => ({
         ...parseOptions(args),
         sqs, sns,
-        log: emptyLog
+        log: emptyLog,
+        out: emptyOut,
     });
     beforeEach(function() {
         sqs = {
@@ -54,11 +56,22 @@ describe('SqsGrep', function () {
             assert.equal(sqsGrep.log, emptyLog);
             assert.equal(sqsGrep.sqs, sqs);
         });
-        it('should default logger to console.log', async function () {
+        it('should default the diagnostics logger to stderr (console.error)', async function () {
             const options = parse(['--help']);
             delete options.log;
             const sqsGrep = new SqsGrep(options);
-            assert.equal(sqsGrep.log, console.log);
+            assert.equal(sqsGrep.log, console.error);
+        });
+        it('should default the results writer to stdout (console.log)', async function () {
+            const options = parse(['--help']);
+            delete options.out;
+            const sqsGrep = new SqsGrep(options);
+            assert.equal(sqsGrep.out, console.log);
+        });
+        it('should use a custom results writer', async function () {
+            const out = sinon.stub();
+            const sqsGrep = new SqsGrep({...parse(['--help']), out});
+            assert.equal(sqsGrep.out, out);
         });
         it('should default sqs to AWS SQS', async function () {
             const options = parse(['--help']);
@@ -75,13 +88,14 @@ describe('SqsGrep', function () {
         it('should default all parameters', async function () {
             const sqsGrep = new SqsGrep({});
             assert.equal(sqsGrep.sqs instanceof SQS, true);
-            assert.equal(sqsGrep.log, console.log);
+            assert.equal(sqsGrep.log, console.error);
+            assert.equal(sqsGrep.out, console.log);
             assert.equal(sqsGrep.options.parallel, 1);
         });
         it('should override default parameters', async function () {
             const sqsGrep = new SqsGrep({parallel: 2});
             assert.equal(sqsGrep.sqs instanceof SQS, true);
-            assert.equal(sqsGrep.log, console.log);
+            assert.equal(sqsGrep.log, console.error);
             assert.equal(sqsGrep.options.parallel, 2);
         });
     });
@@ -121,10 +135,13 @@ describe('SqsGrep', function () {
     });
     describe('#run()', function () {
         it('should validate options and return null when invalid', async function () {
-            const options = parse(['--help']);
+            const log = sinon.stub(), out = sinon.stub();
+            const options = {...parse(['--help']), log, out};
             const sqsGrep = new SqsGrep(options);
             assert.equal(await sqsGrep.run(), null);
-            assert.equal(emptyLog.called, true);
+            // --help was explicitly asked for, so it is a result (stdout), not a diagnostic
+            assert.equal(out.called, true);
+            assert.equal(log.called, false);
         });
         it('should scan all messages', async function () {
             // arrange
@@ -147,6 +164,76 @@ describe('SqsGrep', function () {
             // assert
             assert.equal(res.qtyScanned, 3);
             assert.equal(res.qtyMatched, 3);
+        });
+
+        it('should write matched messages to the results channel and diagnostics to the log', async function () {
+            // arrange
+            const log = sinon.stub(), out = sinon.stub();
+            const options = {...parse(['--queue=A', '--body', 'match']), log, out};
+            const sqsGrep = new SqsGrep(options);
+            sqs.receiveMessage.onFirstCall().returns(Promise.resolve({Messages: [
+                {Body: '{"match":1}'},
+                {Body: 'not this one'},
+                {Body: '{"match":2}'},
+            ]}));
+            [1,2,3,4,5].forEach(call => {
+                sqs.receiveMessage.onCall(call).returns(Promise.resolve({Messages: []}));
+            });
+
+            // act
+            const res = (await sqsGrep.run())!;
+
+            // assert: stdout gets exactly the matched bodies, nothing else, so it can be piped
+            assert.equal(res.qtyMatched, 2);
+            assert.deepEqual(out.args, [['{"match":1}'], ['{"match":2}']]);
+            // ...and every diagnostic went to the log, none to stdout
+            const logged = log.args.map(a => String(a[0]));
+            assert(logged.some(l => /Connecting to SQS queue/.test(l)), 'connection progress is a diagnostic');
+            assert(logged.some(l => /Scanning/.test(l)), 'scan progress is a diagnostic');
+            assert(logged.some(l => /Messages matched: .*2/.test(l)), 'the summary is a diagnostic');
+            assert(!logged.some(l => /"match"/.test(l)), 'matched content must not be logged as a diagnostic');
+        });
+
+        it('should write the full message JSON to the results channel with --full', async function () {
+            // arrange
+            const out = sinon.stub();
+            const options = {...parse(['--queue=A', '--all', '--full']), out};
+            const sqsGrep = new SqsGrep(options);
+            sqs.receiveMessage.onFirstCall().returns(Promise.resolve({Messages: [
+                {Body: 'b', MessageAttributes: {a: {DataType: 'String', StringValue: 'v'}}, Attributes: {SenderId: 's'}},
+            ]}));
+            [1,2,3,4,5].forEach(call => {
+                sqs.receiveMessage.onCall(call).returns(Promise.resolve({Messages: []}));
+            });
+
+            // act
+            await sqsGrep.run();
+
+            // assert
+            sinon.assert.calledOnce(out);
+            assert.deepEqual(JSON.parse(String(out.firstCall.args[0])), {
+                Body: 'b',
+                MessageAttributes: {a: {DataType: 'String', StringValue: 'v'}},
+                Attributes: {SenderId: 's'},
+            });
+        });
+
+        it('should not write anything to the results channel with --silent', async function () {
+            // arrange
+            const out = sinon.stub();
+            const options = {...parse(['--queue=A', '--all', '--silent']), out};
+            const sqsGrep = new SqsGrep(options);
+            sqs.receiveMessage.onFirstCall().returns(Promise.resolve({Messages: [{Body: '1'}, {Body: '2'}]}));
+            [1,2,3,4,5].forEach(call => {
+                sqs.receiveMessage.onCall(call).returns(Promise.resolve({Messages: []}));
+            });
+
+            // act
+            const res = (await sqsGrep.run())!;
+
+            // assert
+            assert.equal(res.qtyMatched, 2);
+            sinon.assert.notCalled(out);
         });
 
         it('should scan all messages with intermittent empty receives', async function () {
@@ -988,7 +1075,7 @@ describe('SqsGrep', function () {
             const awsOptions = SqsGrep._getAwsOptions(options);
 
             // assert
-            assert(awsOptions.logger?.info === console.log);
+            assert(awsOptions.logger?.info === console.error, 'verbose API logs are diagnostics (stderr)');
         });
 
         it('should call preProcessMessage user-script hook', async function () {
@@ -1156,6 +1243,39 @@ describe('SqsGrep', function () {
                 fs.unlinkSync(scriptFile);
             }
         });
+
+        it('should give user scripts separate this.log (diagnostics) and this.out (results) channels', async function () {
+            // arrange
+            const log = sinon.stub(), out = sinon.stub();
+            const scriptFile = path.join(os.tmpdir(), `sqs-grep-out-${process.pid}.cjs`);
+            const options = {...parse(['--queue=A', '--all', '--silent', '--scriptFile', scriptFile]), log, out};
+            sqs.receiveMessage.onFirstCall().returns(Promise.resolve({Messages: [{Body: 'x', MessageId: 'id-1'}]}));
+            [1,2,3,4,5,6].forEach(call => {
+                sqs.receiveMessage.onCall(call).returns(Promise.resolve({Messages: []}));
+            });
+            fs.writeFileSync(scriptFile, `
+                module.exports = {
+                    preProcessMatchedMessage(message) {
+                        this.log('processing ' + message.MessageId);
+                        // A script can produce its own machine-readable output (with --silent
+                        // suppressing the default one), and it lands on stdout on its own
+                        this.out(JSON.stringify({id: message.MessageId}));
+                    }
+                };
+            `);
+            try {
+                const sqsGrep = new SqsGrep(options);
+
+                // act
+                await sqsGrep.run();
+
+                // assert
+                sinon.assert.calledWith(log, 'processing id-1');
+                assert.deepEqual(out.args, [['{"id":"id-1"}']], 'stdout holds only what the script emitted');
+            } finally {
+                fs.unlinkSync(scriptFile);
+            }
+        });
     });
     describe('--stateFile', function () {
         let tempDir: string, stateFilePath: string, inputFilePath: string;
@@ -1195,6 +1315,26 @@ describe('SqsGrep', function () {
             assert.equal(res.qtyScanned, 3);
             assert.equal(sqsGrep.stateFile, null);
             assert.equal(fs.existsSync(stateFilePath), false);
+        });
+
+        it('should let an interrupt stop an --inputFile scan before the end of the file', async function () {
+            // arrange: the file is read synchronously, so the scan only notices an
+            // interrupt (CTRL+C, or stdout being closed) if it yields to the event
+            // loop now and then - which is exactly what a macrotask lets us observe
+            const total = INPUT_FILE_YIELD_INTERVAL * 5;
+            writeInputFile(total);
+            const sqsGrep = new SqsGrep(parse(stateArgs(['--silent'])));
+            setImmediate(() => sqsGrep.interrupt());
+
+            // act
+            const res = (await sqsGrep.run())!;
+
+            // assert
+            assert(res.qtyScanned >= INPUT_FILE_YIELD_INTERVAL, `scanned ${res.qtyScanned}: the first batch runs before any yield`);
+            assert(res.qtyScanned < total, `scanned ${res.qtyScanned} of ${total}: the interrupt must have been noticed`);
+            // The message received right as the interrupt landed is counted as scanned
+            // but not processed (so a resumed run picks it up again)
+            assert.equal(readState().lastProcessedIndex, res.qtyScanned - 1, 'the resume point matches what was processed');
         });
 
         it('should save the state after a full scan', async function () {

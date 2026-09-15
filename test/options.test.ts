@@ -84,6 +84,21 @@ describe('Options', function () {
             assert.equal(hasLog(/sqs-grep version \d+/), true, 'Should print version on console');
             assert.equal(hasLog(/Main options/), false, 'Should not print help on console');
         });
+        it('should write --help and --version to the results writer when one is given', function () {
+            const {logs: outputs, log: out} = logCollector();
+            assert.equal(validateOptions(parseOptions(['--help']), log, out), false);
+            assert.equal(validateOptions(parseOptions(['--version']), log, out), false);
+            const written = outputs.map(s => String(s)).join('');
+            assert.match(written, /Main options/, 'help is a result, not a diagnostic');
+            assert.match(written, /sqs-grep version \d+/, 'the version is a result, not a diagnostic');
+            assert.equal(logs.length, 0, 'nothing must be logged as a diagnostic');
+        });
+        it('should write validation errors to the log even when a results writer is given', function () {
+            const {logs: outputs, log: out} = logCollector();
+            assert.equal(validateOptions(parseOptions(['--parallel', '2']), log, out), false);
+            assert.equal(hasLog(/--queue/), true);
+            assert.equal(outputs.length, 0, 'errors must not pollute the results (stdout)');
+        });
         it('should require --queue or --inputFile', function () {
             const options = parseOptions(['--parallel', '2']);
             assert.equal(validateOptions(options, log), false);

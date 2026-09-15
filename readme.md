@@ -118,6 +118,13 @@ Copy messages from a local file to a queue, keeping track of the progress so tha
 $ sqs-grep --inputFile messages.txt --all --copyTo TargetQueue --stateFile state.json
 ```
 
+Pipe matched messages into other tools. Only the matched messages are written to `stdout` - all
+progress and diagnostic output goes to `stderr` - so the output is safe to pipe or redirect:
+```sh
+$ sqs-grep --queue MyQueue --body '"status":"failed"' | jq .orderId
+$ sqs-grep --queue MyQueue --all --full > messages.jsonl
+```
+
 # Resuming an interrupted offline run
 When processing messages from a local file (`--inputFile`), you can pass `--stateFile <file>` to keep
 track of how far the processing went. The state file records the index of the last message which was
@@ -349,7 +356,8 @@ const sqsGrep = new SqsGrep({
     queue: 'MyQueue',
     region: 'us-east-1',
     body: /Error/,
-    log: message => console.log(message),   // optional - defaults to console.log
+    log: message => console.error(message), // optional - diagnostics, defaults to console.error (stderr)
+    out: message => results.push(message),  // optional - matched messages, defaults to console.log (stdout)
 });
 const result = await sqsGrep.run();          // null when the options are invalid
 console.log(result.qtyScanned, result.qtyMatched);
@@ -380,6 +388,13 @@ working. The changes to be aware of are:
 * **User scripts are unaffected.** Existing plain JavaScript `--scriptFile` scripts using
   `module.exports` keep working as-is (see [user-scripts.md](user-scripts.md)), and scripts may now
   also be written as ES modules.
+* **Diagnostics go to `stderr`, matched messages to `stdout`.** Progress, warnings, the final summary
+  and `--verbose` API logs are now written to `stderr`, while `stdout` receives nothing but the matched
+  messages (and `--help`/`--version` when requested). This makes `sqs-grep ... | jq` and
+  `sqs-grep ... > file` work without any filtering. When a pipe is closed early (`sqs-grep ... | head`),
+  the scan stops gracefully, like on CTRL+C. Library users who relied on the default logger being
+  `console.log` should pass `log`/`out` explicitly: `log` (diagnostics) now defaults to `console.error`,
+  and the new `out` option (results) defaults to `console.log`.
 * **`--verbose` logs API calls through the SDK's structured logger** (`info`/`warn`/`error`), which is
   more detailed than before.
 * For library users, the package entry point now exports TypeScript types alongside `SqsGrep`, and the

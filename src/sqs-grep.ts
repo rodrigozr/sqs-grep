@@ -2,7 +2,10 @@ import fs from 'fs';
 import {EOL} from 'os';
 import {resolve as resolvePath} from 'path';
 import {createRequire} from 'module';
-import chalk from 'chalk';
+import {setImmediate as yieldToEventLoop} from 'timers/promises';
+// Every coloured string in this file is a diagnostic written to stderr, so the
+// colour decision must be based on stderr (see the Logger type)
+import {chalkStderr as chalk} from 'chalk';
 import {SNS, type SNSClientConfig, type MessageAttributeValue as SnsMessageAttributeValue} from '@aws-sdk/client-sns';
 import {SQS, type SQSClientConfig, type Message, type ReceiveMessageResult} from '@aws-sdk/client-sqs';
 import LineByLine from 'n-readlines';
@@ -19,6 +22,13 @@ import type {Logger, SqsClient, SnsClient} from './types.js';
 export const MESSAGE_INDEX: unique symbol = Symbol('sqsGrepMessageIndex');
 
 /**
+ * Number of --inputFile messages processed between yields to the event loop
+ * (see {@link SqsGrep._receiveMessage})
+ * @internal
+ */
+export const INPUT_FILE_YIELD_INTERVAL = 1000;
+
+/**
  * An SQS message as handled by sqs-grep. When read from an --inputFile, it also
  * carries its position in the file under the {@link MESSAGE_INDEX} symbol.
  */
@@ -29,7 +39,8 @@ export interface SqsGrepMessage extends Message {
 /**
  * Hooks which can be implemented by user-provided scripts (see user-scripts.md).
  * Hooks are bound to the running {@link SqsGrep} instance, so `this.log(...)`
- * works inside them. Both synchronous and asynchronous hooks are supported.
+ * (diagnostics, stderr) and `this.out(...)` (results, stdout) work inside them.
+ * Both synchronous and asynchronous hooks are supported.
  */
 export interface UserScriptHooks {
     /** Called for every message received, before matching it against the options */
@@ -81,12 +92,16 @@ export class SqsGrep {
     readonly options: SqsGrepOptions;
     readonly sqs: SqsClient;
     readonly sns: SnsClient;
+    /** Diagnostics: progress, warnings and errors (stderr by default) */
     readonly log: Logger;
+    /** Results: matched messages (stdout by default) */
+    readonly out: Logger;
     running = false;
     emptyReceives = 0;
     qtyScanned = 0;
     qtyMatched = 0;
     messageIndex = 0;
+    messagesSinceYield = 0;
     stateFile: StateFile | null = null;
     startedAt = 0;
     endAt = 0;
@@ -109,7 +124,7 @@ export class SqsGrep {
     constructor(sqs: SqsClient, options: Partial<SqsGrepOptions>, log?: Logger);
     constructor(...args: [Partial<SqsGrepOptions>] | [SqsClient, Partial<SqsGrepOptions>, Logger?]) {
         const options: Partial<SqsGrepOptions> = SqsGrep._isLegacyConstructorCall(args)
-            // Legacy constructor parameters: (sqs, options, log = console.log)
+            // Legacy constructor parameters: (sqs, options, log = console.error)
             ? {...args[1], sqs: args[0], log: args[2]}
             : args[0];
         // Merge with default options
@@ -120,7 +135,8 @@ export class SqsGrep {
         const awsOptions = SqsGrep._getAwsOptions(this.options);
         this.sqs = this.options.sqs || new SQS(awsOptions);
         this.sns = this.options.sns || new SNS(awsOptions);
-        this.log = this.options.log || console.log;
+        this.log = this.options.log || console.error;
+        this.out = this.options.out || console.log;
         this._configureThrottling();
         this.userScript = this._loadUserScript();
     }
@@ -130,7 +146,7 @@ export class SqsGrep {
      * @returns the execution result, or `null` when the options are invalid
      */
     async run(): Promise<SqsGrepResult | null> {
-        if (!validateOptions(this.options, this.log)) {
+        if (!validateOptions(this.options, this.log, this.out)) {
             return null;
         }
         await this._connectToQueues();
@@ -289,7 +305,7 @@ export class SqsGrep {
             const scriptModule = SqsGrep._unwrapScriptModule(requireFromSqsGrep(scriptFile));
             hooks = { ...hooks, ...scriptModule };
         }
-        // Bind all hooks to this instance so they can do things like this.log('message')
+        // Bind all hooks to this instance so they can do things like this.log('message') or this.out('result')
         for (const key in hooks) {
             const element = hooks[key];
             if (typeof element === 'function') {
@@ -355,7 +371,7 @@ export class SqsGrep {
             opts.endpoint = options.endpointUrl;
         }
         if (options.verbose) {
-            const log = options.log || console.log;
+            const log = options.log || console.error;
             opts.logger = {
                 // The SDK logs every API call (with its input and output) at 'info' level.
                 // 'debug' is intentionally silenced as it is too noisy to be useful here.
@@ -374,6 +390,17 @@ export class SqsGrep {
      */
     async _receiveMessage(): Promise<ReceiveMessageResult> {
         if (this.options.inputFile) {
+            // Reading the file is fully synchronous, and so is everything else in the
+            // loop unless a message is copied/moved/published. Without an occasional
+            // yield the event loop would starve, and neither SIGINT (CTRL+C) nor a
+            // closed stdout pipe would be noticed before the whole file had been
+            // processed. Yielding on every message costs an order of magnitude in
+            // throughput, hence the batching: at the speed this loop runs, one yield
+            // per batch still reacts within a few milliseconds.
+            if (++this.messagesSinceYield >= INPUT_FILE_YIELD_INTERVAL) {
+                this.messagesSinceYield = 0;
+                await yieldToEventLoop();
+            }
             const line = this.inputFileReader!.next();
             if (!line) {
                 return { Messages: [] };
@@ -532,7 +559,9 @@ export class SqsGrep {
     }
 
     /**
-     * Prints an SQS message to the console, based on the options
+     * Prints an SQS message, based on the options: to the --outputFile when set,
+     * otherwise to the results channel (stdout by default, so that the output can
+     * be piped into other tools without any diagnostics mixed in)
      * @param message SQS message
      * @internal
      */
@@ -555,7 +584,7 @@ export class SqsGrep {
                 });
             });
         } else {
-            this.log(content);
+            this.out(content);
         }
     }
 

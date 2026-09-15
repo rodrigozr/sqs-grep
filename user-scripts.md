@@ -23,7 +23,7 @@ module.exports = {
      */
     preProcessMessage(message) {
         // Do something with the message
-        this.log(JSON.stringify(message));
+        this.log(`Pre-processing ${message.MessageId}`);
     },
     /**
      * Called after an SQS message has been matched, and right before it is processed for further actions such
@@ -35,14 +35,19 @@ module.exports = {
      */
     preProcessMatchedMessage(message) {
         // Do something with the message
-        this.log(JSON.stringify(message));
+        this.out(JSON.stringify(message));
     }
 };
 ```
 
 All hooks will be bound to the [SqsGrep](https://github.com/rodrigozr/sqs-grep/blob/master/src/sqs-grep.ts) class instance which is currently running, so hooks have access to all objects exposed by SqsGrep, such as:
 * `options` - object containing all execution options
-* `log(message)` - function which logs something to the console, respecting the --silent command-line preference
+* `log(message)` - writes a **diagnostic** message (progress, warnings...). It goes to **stderr** by default,
+  together with all of sqs-grep's own diagnostics, so it never gets in the way of piped output
+* `out(message)` - writes a **result** line. It goes to **stdout** by default, the same channel sqs-grep uses
+  to print matched messages. Use it when your script produces its own output (typically together with
+  `--silent`, so that only the script's output is printed), and it will be pipeable like any other result:
+  `sqs-grep -q Queue --all --silent --scriptFile my-script.js | jq .`
 
 All hooks can also be defined as an **async function** or a function which returns a Promise and sqs-grep will properly handle them using `await`.
 

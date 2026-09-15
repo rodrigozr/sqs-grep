@@ -1,7 +1,8 @@
 import fs from 'fs';
 import {EOL} from 'os';
 import {resolve} from 'path';
-import chalk from 'chalk';
+// State file messages are diagnostics (stderr), hence the stderr-aware chalk instance
+import {chalkStderr as chalk} from 'chalk';
 import type {Logger} from './types.js';
 
 /**
@@ -34,7 +35,7 @@ export interface StateFileParams {
     inputFile?: string;
     /** Number of processed messages between saves */
     flushInterval?: number;
-    /** Logger to use */
+    /** Diagnostics logger (defaults to `console.error`, i.e. stderr) */
     log?: Logger;
 }
 
@@ -65,7 +66,7 @@ export class StateFile {
         this.filePath = filePath;
         this.inputFile = inputFile ? resolve(inputFile) : undefined;
         this.flushInterval = flushInterval !== undefined && flushInterval > 0 ? flushInterval : DEFAULT_FLUSH_INTERVAL;
-        this.log = log || console.log;
+        this.log = log || console.error;
     }
 
     /**

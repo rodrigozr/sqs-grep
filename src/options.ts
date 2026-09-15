@@ -1,6 +1,9 @@
 import commandLineArgs from 'command-line-args';
 import commandLineUsage from 'command-line-usage';
-import chalk from 'chalk';
+// Everything coloured here is a diagnostic, which goes to stderr: chalkStderr
+// bases its colour support on stderr rather than stdout, so diagnostics stay
+// coloured on the terminal even when stdout is piped somewhere else.
+import {chalkStderr as chalk} from 'chalk';
 import fs from 'fs';
 import {dirname, join} from 'path';
 import type {Logger, SqsClient, SnsClient} from './types.js';
@@ -90,8 +93,10 @@ export interface SqsGrepOptions {
     sqs?: SqsClient;
     /** Custom SNS client (defaults to the AWS SDK client) */
     sns?: SnsClient;
-    /** Custom logger (defaults to console.log) */
+    /** Diagnostics logger: progress, warnings and errors (defaults to `console.error`, i.e. stderr) */
     log?: Logger;
+    /** Results writer: matched messages, `--help` and `--version` (defaults to `console.log`, i.e. stdout) */
+    out?: Logger;
 
     // Resolved at runtime while connecting to the queues
     sourceQueueUrl?: string;
@@ -211,20 +216,20 @@ export function parseOptions(argv?: string[]): SqsGrepOptions {
 }
 
 /**
- * Prints the application version to the console
- * @param log logger to use
+ * Prints the application version
+ * @param out writer to use (stdout: the version was explicitly asked for)
  */
-export function showVersion(log: Logger): void {
-    log(`sqs-grep version ${version}`);
+export function showVersion(out: Logger): void {
+    out(`sqs-grep version ${version}`);
 }
 
 /**
- * Prints the command-line help to the console
- * @param log logger to use
+ * Prints the command-line help
+ * @param out writer to use (stdout: the help was explicitly asked for)
  */
-export function showHelp(log: Logger): void {
-    showVersion(log);
-    log(commandLineUsage(usage));
+export function showHelp(out: Logger): void {
+    showVersion(out);
+    out(commandLineUsage(usage));
 }
 
 /**
@@ -234,16 +239,17 @@ export function showHelp(log: Logger): void {
  * If the options are not valid, this will print the error and usage help
  * and will return false.
  * @param options parsed options
- * @param log logger to use
+ * @param log diagnostics logger, used for validation errors
+ * @param out results writer, used for `--help` and `--version` (defaults to `log`)
  * @returns true if we can proceed
  */
-export function validateOptions(options: SqsGrepOptions, log: Logger): boolean {
+export function validateOptions(options: SqsGrepOptions, log: Logger, out: Logger = log): boolean {
     if (options.help) {
-        showHelp(log);
+        showHelp(out);
         return false;
     }
     if (options.version) {
-        showVersion(log);
+        showVersion(out);
         return false;
     }
     const error = (msg: string): false => {

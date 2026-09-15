@@ -27,10 +27,15 @@ describe('package entry point', function () {
     });
     it('should be usable the way JavaScript clients use it', async function () {
         // Mirrors: import { SqsGrep } from 'sqs-grep'; new SqsGrep({...}).run()
-        const logs: string[] = [];
+        const logs: string[] = [], outputs: string[] = [];
         const {SqsGrep: SqsGrepFromPackage} = sqsGrepPackage;
-        const instance = new SqsGrepFromPackage({help: true, log: msg => { logs.push(String(msg)) }});
+        const instance = new SqsGrepFromPackage({
+            help: true,
+            log: msg => { logs.push(String(msg)) },
+            out: msg => { outputs.push(String(msg)) },
+        });
         assert.equal(await instance.run(), null);
-        assert.equal(logs.some(l => /sqs-grep version/.test(l)), true);
+        assert.equal(outputs.some(l => /sqs-grep version/.test(l)), true, '--help is written to the results writer');
+        assert.equal(logs.length, 0, 'and nothing is logged as a diagnostic');
     });
 });

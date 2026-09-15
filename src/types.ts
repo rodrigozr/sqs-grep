@@ -8,7 +8,14 @@ import type {SNS} from '@aws-sdk/client-sns';
 import type {SQS} from '@aws-sdk/client-sqs';
 
 /**
- * Logger function used across sqs-grep (defaults to `console.log`)
+ * Function used by sqs-grep to write a line of text. Two of these are used:
+ * - `log` for diagnostics (progress, warnings, errors), defaulting to
+ *   `console.error`, i.e. **stderr**
+ * - `out` for results (matched messages, `--help`, `--version`), defaulting to
+ *   `console.log`, i.e. **stdout**
+ *
+ * Keeping them apart is what makes `sqs-grep ... | jq` work: only the matched
+ * messages reach the pipe.
  */
 export type Logger = (message?: unknown, ...optionalParams: unknown[]) => void;
 

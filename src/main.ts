@@ -16,6 +16,17 @@ async function main(): Promise<void> {
         sqsGrep.log("Caught interrupt signal");
         sqsGrep.interrupt();
     });
+    // Graceful stop when whoever is reading our output goes away, as in
+    // `sqs-grep ... | head -1`: the next write to stdout fails with EPIPE. Treat
+    // it like an interrupt rather than an error, so that the scan stops instead
+    // of carrying on into a closed pipe, and --stateFile still gets saved.
+    process.stdout.on('error', (err: NodeJS.ErrnoException) => {
+        if (err.code === 'EPIPE') {
+            sqsGrep.interrupt();
+        } else {
+            throw err;
+        }
+    });
     await sqsGrep.run();
 }
 

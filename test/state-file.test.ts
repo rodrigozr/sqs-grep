@@ -52,8 +52,8 @@ describe('StateFile', function () {
         it('should honour a custom flush interval', function () {
             assert.equal(create({flushInterval: 7}).flushInterval, 7);
         });
-        it('should default the logger to console.log', function () {
-            assert.equal(create({log: undefined}).log, console.log);
+        it('should default the logger to stderr (console.error)', function () {
+            assert.equal(create({log: undefined}).log, console.error);
         });
     });
 
