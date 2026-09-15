@@ -62,8 +62,11 @@ describe('Integration Tests', function () {
             } catch {
                 /* ignore - the container did not exist */
             }
-            // Start the container
-            await exec(`${containerCli} run -d --name ${containerName} -p 4566:4566 -p 4510-4559:4510-4559 -e SERVICES=sqs,sns localstack/localstack:3.0.2`);
+            // Start the container.
+            // 4.14.0 (Feb 2026) is the last LocalStack release which runs without a
+            // licence: from the 2026.x line onwards the image refuses to start unless
+            // LOCALSTACK_AUTH_TOKEN is set (exit code 55, "License activation failed").
+            await exec(`${containerCli} run -d --name ${containerName} -p 4566:4566 -p 4510-4559:4510-4559 -e SERVICES=sqs,sns localstack/localstack:4.14.0`);
             // LocalStack accepts any credentials. They are passed explicitly rather
             // than through the environment, as the SDK ignores AWS_ACCESS_KEY_ID and
             // AWS_SECRET_ACCESS_KEY whenever AWS_PROFILE happens to be set
