@@ -64,20 +64,17 @@ describe('Integration Tests', function () {
             }
             // Start the container
             await exec(`${containerCli} run -d --name ${containerName} -p 4566:4566 -p 4510-4559:4510-4559 -e SERVICES=sqs,sns localstack/localstack:3.0.2`);
-            process.env['AWS_ACCESS_KEY_ID'] = 'test';
-            process.env['AWS_SECRET_ACCESS_KEY'] = 'test';
-            // Create a custom SQS connector
-            let options = parseOptions(['--endpointUrl', 'http://localhost:4566']);
-            sqs = new SQS({
+            // LocalStack accepts any credentials. They are passed explicitly rather
+            // than through the environment, as the SDK ignores AWS_ACCESS_KEY_ID and
+            // AWS_SECRET_ACCESS_KEY whenever AWS_PROFILE happens to be set
+            const options = parseOptions(['--endpointUrl', 'http://localhost:4566']);
+            const clientConfig = {
                 region: options.region,
                 endpoint: options.endpointUrl,
-            });
-            // Create a custom SNS connector
-            options = parseOptions(['--endpointUrl', 'http://localhost:4566']);
-            sns = new SNS({
-                region: options.region,
-                endpoint: options.endpointUrl,
-            });
+                credentials: {accessKeyId: 'test', secretAccessKey: 'test'},
+            };
+            sqs = new SQS(clientConfig);
+            sns = new SNS(clientConfig);
             // Wait for it to be ready for a maximum of 5 minutes
             const deadline = new Date().getTime() + (5 * 60 * 1000);
             while (new Date().getTime() < deadline) {
@@ -156,7 +153,9 @@ describe('Integration Tests', function () {
     };
     const parse = (args: string[]): SqsGrepOptions => ({
         sqs, sns,
+        // Both channels are silenced: diagnostics (log) and matched messages (out)
         log: emptyLog,
+        out: emptyLog,
         ...parseOptions(args)
     });
     it('should scan the queue', async function () {
