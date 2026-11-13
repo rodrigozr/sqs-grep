@@ -21,7 +21,7 @@ $ npx sqs-grep --queue MyQueue --body "Error"
 `npx` downloads the latest version on first use and caches it, which makes it a convenient way to
 run `sqs-grep` on a machine you would rather not install anything on (a bastion host or a CI job,
 for example). Every example in this document works the same way with `npx sqs-grep` in place of
-`sqs-grep`. To pin a specific version, pass it in the package name: `npx sqs-grep@2.0.0 --help`.
+`sqs-grep`. To pin a specific version, pass it in the package name: `npx sqs-grep@2.0.1 --help`.
 
 `sqs-grep` requires **Node.js 22.12 or later**.
 
@@ -32,8 +32,8 @@ Official images are published to Docker Hub as
 ```sh
 $ docker run --rm rodrigozr/sqs-grep --help
 ```
-Each release is tagged with its full version plus the moving `2.3`, `2` and `latest` tags, so pin
-whichever you prefer: `rodrigozr/sqs-grep:2.0.0`, `rodrigozr/sqs-grep:2` and so on.
+Each release is tagged with its full version plus the moving `2.0`, `2` and `latest` tags, so pin
+whichever you prefer: `rodrigozr/sqs-grep:2.0.1`, `rodrigozr/sqs-grep:2` and so on.
 
 You can also build the image yourself from the `Dockerfile` in the repository (based on
 `node:lts-alpine`) with Docker or any compatible tool such as Finch or Podman:
@@ -232,7 +232,7 @@ If you don't specify `--moveTo` nor `--delete`, and your source queue is larger 
 ```
 $ sqs-grep --help
 
-sqs-grep version 2.0.0
+sqs-grep version 2.0.1
 
 sqs-grep
 
